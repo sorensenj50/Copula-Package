@@ -116,13 +116,17 @@ class StandardSkewedT(Marginal):
                          param_bounds = [(2 + adj, np.inf), (-1 + adj, 1 - adj)],
                          params = (eta, lam))
 
+    def _get_ABC(self, eta, lam):
+        C = gamma((eta + 1) / 2) / (np.sqrt(np.pi * (eta - 2))  * gamma(eta / 2))
+        A = 4 * lam * C * (eta - 2) / (eta - 1)
+        B = np.sqrt(1 + 3 * (lam**2) - (A**2))
+
+        return A, B, C
         
     def _logpdf(self, x, eta, lam):
 
         # constants
-        C = gamma((eta + 1) / 2) / (np.sqrt(np.pi * (eta - 2))  * gamma(eta / 2))
-        A = 4 * lam * C * (eta - 2) / (eta - 1)
-        B = np.sqrt(1 + 3 * (lam**2) - (A**2))
+        A, B, C = self._get_ABC(eta, lam)
 
         # this introduces skewness
         denom = np.where(x < -A/B, 1 - lam, 1 + lam)
@@ -132,6 +136,37 @@ class StandardSkewedT(Marginal):
 
     def _pdf(self, x, eta, lam):
         return np.exp(self._logpdf(x, eta, lam))
+    
+    def _ppf(self, u, eta, lam):
+        # TODO: check PPF aligns with CDF
+
+        # source: Tino Contino (DirtyQuant)
+
+        # constants
+        A, B, _ = self._get_ABC(eta, lam)
+        eta_const = np.sqrt((eta - 2) / eta)
+
+        # switching based on 
+        core = np.where(u < (1 - lam) / 2, 
+                        (1 - lam) * stats.t.ppf(u / (1 - lam), eta), 
+                        (1 + lam) * stats.t.ppf((u + lam) / (1 + lam), eta))
+        
+        return (1 / B) * (eta_const * core - A)
+    
+    def _cdf(self, x, eta, lam):
+        # source: Tino Contino (DirtyQuant)
+
+        # constants
+        A, B, _ = self._get_ABC(eta, lam)
+        numerator = np.sqrt(eta / (eta - 2)) * (B * x + A)
+
+        return np.where(x < -A/B,
+                    (1 - lam) * stats.t.cdf(numerator / (1 - lam), eta),
+                    (1 + lam) * stats.t.cdf(numerator / (1 + lam), eta) - lam)
+        
+
+        
+
 
 
 
