@@ -279,10 +279,9 @@ class Normal(Elliptical):
 
 
     
-    
 class StudentsT(Elliptical):
     def __init__(self, df = 30, Q = 0, adj = 1e-4, df_upper_bound = 100):
-        super().__init__(model_name = "StudentT", initial_param_guess = [30, 0], 
+        super().__init__(model_name = "StudentsT", initial_param_guess = [30, 0], 
                          param_bounds = [(1, df_upper_bound), (-1 + adj, 1 - adj)], 
                          param_names = ("df", "Q"), params = (df, Q))
 

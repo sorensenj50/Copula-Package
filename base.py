@@ -28,8 +28,8 @@ class Base:
         # initializing them here for clarity of what variables are included in this object
         self.n = None
         self.LL = None; self.aic = None; self.bic = None
-        self.hess_matrix = None; self.se = None
-        self.conf_int = None; self.t = None; self.p = None
+        self.hess_matrix = np.array([]); self.se = np.array([])
+        self.conf_int = np.array([]); self.t = np.array([]); self.p = np.array([])
 
 
     def _validate_params(self, params, param_names, param_bounds):
@@ -111,6 +111,8 @@ class Base:
         table.extend_right(SimpleTable(vals, stubs=stubs))
         smry.tables.append(table)
 
+        if len(self.params) <= 0:
+            return smry
     
         data = []
         for i, (param, guess, std_err, t_val, p_val, ci) in enumerate(zip(self.params, self.initial_param_guess, self.se, self.t, self.p, self.conf_int)):
