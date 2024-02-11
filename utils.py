@@ -7,6 +7,10 @@ def get_u_range(adj = 1e-3, range_num = 100):
     return np.linspace(0 + adj, 1 - adj, range_num)
 
 
+def get_x_range(low = -3, high = 3, range_num = 1000):
+    return np.linspace(low, high, range_num)
+
+
 def get_u_grid(adj = 1e-3, range_num = 100):
     u = get_u_range(adj = adj, range_num = range_num)
     return np.meshgrid(u, u)
@@ -105,7 +109,7 @@ def bootstrap_quantile_dependance(x1, x2, q_range, n = 500, seed = None):
 def build_cdf_interpolations(x_range, cdf_values):
 
     # cdf and ppf or inverse cdf
-    cdf = interp1d(x_range, cdf, bounds_error = False, fill_value = (x_range[0], x_range[-1]))
+    cdf = interp1d(x_range, cdf_values, bounds_error = False, fill_value = (x_range[0], x_range[-1]))
     ppf = interp1d(cdf_values, x_range, bounds_error = False, fill_value = (cdf_values[0], cdf_values[-1]))
     return cdf, ppf
 
@@ -117,8 +121,8 @@ def find_x_bounds(loc, scale, pdf_func, *pdf_params, tol = 5e-4, expansion_facto
     
     while True:
         
-        pdf_right = pdf_func(right_bound, *pdf_params)[0]
-        pdf_left = pdf_func(left_bound, *pdf_params)[0]
+        pdf_right = pdf_func(right_bound, *pdf_params)
+        pdf_left = pdf_func(left_bound, *pdf_params)
         
         if pdf_left > tol:
             left_bound -= step

@@ -46,6 +46,12 @@ class Base:
 
     def _get_objective_func(self, *data):
         return lambda params: -1 * self._log_likelihood(*data, *params)
+    
+
+    def _fit(self, f, initial_param_guess, param_bounds, optimizer = "Powell"):
+        
+        # defualt mle optimization (aka canonical likelihood implementation)
+        return minimize(f, initial_param_guess, bounds = param_bounds, method = optimizer)
 
 
     def _post_process_fit(self, opt_params, objective_func, n):

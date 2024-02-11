@@ -69,7 +69,7 @@ class PureCopula(BivariateCopula):
         return np.sum(self._logpdf(u1, u2, *params))
     
 
-    def fit(self, u1, u2, method = "Powell", initial_param_guesses = None, adj = 1e-4):
+    def fit(self, u1, u2, optimizer = "Powell", initial_param_guesses = None, adj = 1e-4):
 
         # input validation
         u1_valid, u2_valid = self._handle_uu_input(u1, u2, adj = adj)
@@ -82,14 +82,9 @@ class PureCopula(BivariateCopula):
         initial_guess = initial_param_guesses if initial_param_guesses is not None else self.initial_param_guess
 
         objective_func = self._get_objective_func(u1_valid, u2_valid)
-        opt_results = self._fit(objective_func, initial_guess, self.param_bounds, method = method)
+        opt_results = self._fit(objective_func, initial_guess, self.param_bounds, optimizer = optimizer)
         self._post_process_fit(opt_results.x, objective_func, len(u1.flatten()))
 
-
-    def _fit(self, f, initial_param_guess, param_bounds, method = "Powell"):
-        
-        # defualt mle optimization (aka canonical likelihood implementation)
-        return minimize(f, initial_param_guess, bounds = param_bounds, method = method)
 
 
     def _post_process_fit(self, opt_params, objective_func, n):
