@@ -4,6 +4,7 @@ from base import Base
 import numpy as np
 from scipy import stats
 from scipy.special import gamma
+from scipy.interpolate import interp1d
 from datetime import datetime
 
 class Marginal(Base):
@@ -15,7 +16,7 @@ class Marginal(Base):
 
 
     def _handle_input(self, x_or_u, is_x = True, adj = 1e-4):
-        if not utils.is_arraylike(x_or_u):
+        if not (utils.is_arraylike(x_or_u) or utils.is_number(x_or_u)):
             raise SyntaxError
         
         if is_x:
@@ -136,7 +137,8 @@ class StandardSkewedT(Marginal):
 
     def _pdf(self, x, eta, lam):
         return np.exp(self._logpdf(x, eta, lam))
-    
+
+
     def _ppf(self, u, eta, lam):
         # TODO: check PPF aligns with CDF
 
@@ -146,13 +148,14 @@ class StandardSkewedT(Marginal):
         A, B, _ = self._get_ABC(eta, lam)
         eta_const = np.sqrt((eta - 2) / eta)
 
-        # switching based on 
+        # switching
         core = np.where(u < (1 - lam) / 2, 
                         (1 - lam) * stats.t.ppf(u / (1 - lam), eta), 
                         (1 + lam) * stats.t.ppf((u + lam) / (1 + lam), eta))
         
         return (1 / B) * (eta_const * core - A)
     
+
     def _cdf(self, x, eta, lam):
         # source: Tino Contino (DirtyQuant)
 
@@ -164,6 +167,49 @@ class StandardSkewedT(Marginal):
                     (1 - lam) * stats.t.cdf(numerator / (1 - lam), eta),
                     (1 + lam) * stats.t.cdf(numerator / (1 + lam), eta) - lam)
         
+
+class GaussianKDE(Marginal):
+    def __init__(self, bw_method = None):
+        # bw_method passed to scipy.stats.gaussian_kde
+        # can be scalar, "scott", "silverman", or callable
+        self.bw_method = bw_method
+        super().__init__(None, model_name = "GaussianKDE", initial_param_guess = [], param_names = [],
+                         param_bounds = [], params = [])
+    
+    def fit(self, x):
+        # check that univariate
+        self.kde = stats.gaussian_kde(x, bw_method = self.bw_method)
+
+        # getting CDF and PPF interpolations
+        x_range = np.linspace(np.min(x) - 3 * self.kde.factor, np.max(x) + 3 * self.kde.factor, 1000)
+        self._prepare_cdf_ppf(x_range)
+
+
+    def _prepare_cdf_ppf(self, x_range):
+            
+        cdf_values = np.zeros_like(x_range)
+
+        for xi in self.kde.dataset[0]:
+            cdf_values += stats.norm.cdf(x_range, loc = xi, scale = self.kde.factor)
+
+        cdf_values /= cdf_values[-1]
+        self.interp1d_cdf_func = interp1d(x_range, cdf_values, bounds_error = False, fill_value = (x_range[0], x_range[-1]))
+        self.interp1d_ppf_func = interp1d(cdf_values, x_range, bounds_error = False, fill_value = (x_range[0], x_range[-1]))
+
+
+    def _pdf(self, x):
+        return self.kde(x)
+    
+    def _logpdf(self, x):
+        return np.log(self._pdf(x))
+    
+    def _cdf(self, x):
+        return self.interp1d_cdf_func(x)
+    
+    def _ppf(self, u):
+        return self.interp1d_ppf_func(u)
+
+
 
         
 

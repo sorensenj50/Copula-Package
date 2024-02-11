@@ -120,7 +120,7 @@ def quantile_dependance(u1, u2, copula = None, copula_label = None, show_indep =
     # handle input
 
     q_range = utils.get_u_range(adj = adj, range_num = range_num)
-    q_dep_data = [utils.quantile_dependence(u1, u2, q) for q in q_range]
+    q_dep_data = [utils.quantile_dependance(u1, u2, q) for q in q_range]
 
     if ax is None:
         f, ax = plt.subplots()
