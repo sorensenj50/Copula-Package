@@ -4,6 +4,7 @@ import utils
 import numpy as np
 from bivariate import BivariateCopula
 from scipy.integrate import cumulative_trapezoid
+from scipy.special import beta
 
 
 class SkewedNormal(MarginalDist):
@@ -105,7 +106,7 @@ class MixtureCopula(BivariateCopula):
 
 
 
-class SkewedGeneralizedT(GeneralizedFamily):
+class SkewedGeneralizedT:
     def __init__(self, mu = 0, sigma = 1, lam = 0, p = 2, q = 1e4, adj = 1e-4):
         super().__init__(None, model_name = "SkewedGeneralizedT", 
                          initial_param_guess = [0, 1, 0, 2, 1000], 
