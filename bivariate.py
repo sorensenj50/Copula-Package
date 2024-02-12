@@ -69,7 +69,7 @@ class PureCopula(BivariateCopula):
         return np.sum(self._logpdf(u1, u2, *params))
     
 
-    def fit(self, u1, u2, optimizer = "Powell", initial_param_guesses = None, adj = 1e-4):
+    def fit(self, u1, u2, optimizer = "Powell", initial_param_guesses = None, adj = 1e-4, robust_cov = True):
 
         # input validation
         u1_valid, u2_valid = self._handle_uu_input(u1, u2, adj = adj)
@@ -80,16 +80,18 @@ class PureCopula(BivariateCopula):
             raise SyntaxError
     
         initial_guess = initial_param_guesses if initial_param_guesses is not None else self.initial_param_guess
-
         objective_func = self._get_objective_func(u1_valid, u2_valid)
+
         opt_results = self._fit(objective_func, initial_guess, self.param_bounds, optimizer = optimizer)
-        self._post_process_fit(opt_results.x, objective_func, len(u1.flatten()))
+
+        self._post_process_fit(utils.flatten_concatenate(u1, u2),opt_results.x, 
+                               objective_func, robust_cov = robust_cov)
 
 
 
-    def _post_process_fit(self, opt_params, objective_func, n):
+    def _post_process_fit(self, opt_params, objective_func, n, robust_cov = True):
         
-        super()._post_process_fit(opt_params, objective_func, n)
+        super()._post_process_fit(opt_params, objective_func, n, robust_cov = robust_cov)
         self.tau = self._kendall_tau(*self.params)
         self.rho = self._spearman_rho(*self.params)
 
@@ -158,10 +160,10 @@ class PureCopula(BivariateCopula):
         
 
     def simulate(self, n = 1000, seed = None):
-        gen = np.random.default_rng(seed = seed)
+        rng = np.random.default_rng(seed = seed)
 
-        u1 = gen.uniform(size = n)
-        q = gen.uniform(size = n)
+        u1 = rng.uniform(size = n)
+        q = rng.uniform(size = n)
         u2 = self._conditional_quantile(u1, q, *self.params)
         
         return u1, u2
@@ -205,9 +207,29 @@ class PureCopula(BivariateCopula):
 
         return np.where(q > 0.5, (B - A + D - C) / (B - A), D / A)
 
-    
 
+class Independent(PureCopula):
+    def __init__(self):
+        super().__init__(model_name = "Independent", initial_param_guess = [],
+                         param_bounds = [], param_names = [], params = [])
         
+    def _logpdf(self, u1, u2):
+        return np.zeros_like(u1)
+    
+    def _cdf(self, u1, u2):
+        return u1 * u2
+    
+    def _kendall_tau(self):
+        return 0
+    
+    def _spearman_rho(self):
+        return 0
+    
+    def _conditional_quantile(self, u1, q):
+        return q
+
+
+
 
 class Elliptical(PureCopula):
     def __init__(self, *args, **kwargs):

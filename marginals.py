@@ -64,17 +64,18 @@ class Marginal(Base):
         return np.sum(self._logpdf(x, *params))
     
 
-    def fit(self, x):
+    def fit(self, x, robust_cov = True):
         valid_x = self._handle_input(x)
 
         # relying on scipy implementation of fit
-        opt_params = self.rv_obj(x)
-        self._post_process_fit(np.array([*opt_params]), self._get_objective_func(x), len(valid_x))
+        opt_params = self.rv_obj.fit(x)
+        self._post_process_fit(valid_x, np.array([*opt_params]), 
+                               self._get_objective_func(valid_x), robust_cov = robust_cov)
 
     
     def simulate(self, n = 1000, seed = None):
-        gen = np.random.default_rng(seed = seed)
-        u = gen.uniform(size = n)
+        rng = np.random.default_rng(seed = seed)
+        u = rng.uniform(size = n)
         return self.ppf(u)
     
 
@@ -118,41 +119,38 @@ class StudentsT(Marginal):
         
 
 
-        
-class SkewedStudentsT(Marginal):
-    # hansen 1994
-
-    def __init__(self, mu = 0, sigma = 1, eta = 30, lam = 0, adj = 1e-2):
+class StandardSkewedT(Marginal):
+    def __init__(self, eta = 30, lam = 0, adj = 1e-2):
         super().__init__(None, model_name = "SkewedStudentsT", 
-                         initial_param_guess = [0, 1, 30, 0], param_names = ["mu", "sigma", "eta", "lam"],
-                         param_bounds = [(-np.inf, np.inf), (adj, np.inf), (2 + adj, np.inf), (-1 + adj, 1 - adj)],
-                         params = [mu, sigma, eta, lam])
-
+                         initial_param_guess = [30, 0], param_names = ["eta", "lam"],
+                         param_bounds = [(2 + adj, np.inf), (-1 + adj, 1 - adj)],
+                         params = [eta, lam])
+        
     def _get_ABC(self, eta, lam):
         C = gamma((eta + 1) / 2) / (np.sqrt(np.pi * (eta - 2))  * gamma(eta / 2))
         A = 4 * lam * C * (eta - 2) / (eta - 1)
         B = np.sqrt(1 + 3 * (lam**2) - (A**2))
 
         return A, B, C
-        
-    def _logpdf(self, x, mu, sigma, eta, lam):
+    
+    def _logpdf(self, x, eta, lam):
 
-        z = (x - mu) / sigma
+        #z = (x - mu) / sigma
 
         # constants
         A, B, C = self._get_ABC(eta, lam)
 
         # this introduces skewness
-        denom = np.where(z < -A/B, 1 - lam, 1 + lam)
-        inside_term = 1 + 1/(eta - 2) * np.square((B * z + A)/denom)
+        denom = np.where(x < -A/B, 1 - lam, 1 + lam)
+        inside_term = 1 + 1/(eta - 2) * np.square((B * x + A)/denom)
         return np.log(B) + np.log(C) - ((eta + 1) / 2) * np.log(inside_term)
     
 
-    def _pdf(self, z, mu, sigma, eta, lam):
-        return np.exp(self._logpdf(z, mu, sigma, eta, lam))
+    def _pdf(self, x, eta, lam):
+        return np.exp(self._logpdf(x, eta, lam))
 
 
-    def _ppf(self, u, mu, sigma, eta, lam):
+    def _ppf(self, u, eta, lam):
 
         # source: Tino Contino (DirtyQuant)
 
@@ -165,31 +163,33 @@ class SkewedStudentsT(Marginal):
                         (1 - lam) * stats.t.ppf(u / (1 - lam), eta), 
                         (1 + lam) * stats.t.ppf((u + lam) / (1 + lam), eta))
         
-        return (1 / B) * (eta_const * core - A) * sigma + mu
+        return (1 / B) * (eta_const * core - A)
     
 
-    def _cdf(self, x, mu, sigma, eta, lam):
+    def _cdf(self, x, eta, lam):
         # source: Tino Contino (DirtyQuant)
-        z = (x - mu) / sigma
+        #z = (x - mu) / sigma
 
         # constants
         A, B, _ = self._get_ABC(eta, lam)
-        numerator = np.sqrt(eta / (eta - 2)) * (B * z + A)
+        numerator = np.sqrt(eta / (eta - 2)) * (B * x + A)
 
-        return np.where(z < -A/B,
+        return np.where(x < -A/B,
                     (1 - lam) * stats.t.cdf(numerator / (1 - lam), eta),
                     (1 + lam) * stats.t.cdf(numerator / (1 + lam), eta) - lam)
     
-    def fit(self, x, optimizer = "Powell"):
+
+    
+    def fit(self, x, optimizer = "Powell", robust_cov = True):
+        # error handling
         valid_x = self._handle_input(x)
-        f = self._get_objective_func(x)
+
+        f = self._get_objective_func(valid_x)
         opt_results = self._fit(f, self.initial_param_guess, self.param_bounds, optimizer = optimizer)
-        self._post_process_fit(opt_results.x, self._get_objective_func(x), len(valid_x))
+        self._post_process_fit(valid_x, opt_results.x, self._get_objective_func(x), robust_cov = robust_cov)
     
 
-    
-    
-
+  
 
 
 class GaussianKDE(Marginal):

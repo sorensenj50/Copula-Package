@@ -132,6 +132,10 @@ def find_x_bounds(loc, scale, pdf_func, *pdf_params, tol = 5e-4, expansion_facto
             
         if pdf_left < tol and pdf_right < tol:
             return left_bound, right_bound
+        
+
+def flatten_concatenate(data1, data2):
+    return np.stack([data1.flatten(), data2.flatten()], axis = 1)
 
 
 

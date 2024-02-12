@@ -101,6 +101,9 @@ class MixtureCopula(BivariateCopula):
 
         return u1, u2
 
+
+
+
 class SkewedGeneralizedT(GeneralizedFamily):
     def __init__(self, mu = 0, sigma = 1, lam = 0, p = 2, q = 1e4, adj = 1e-4):
         super().__init__(None, model_name = "SkewedGeneralizedT", 

@@ -43,47 +43,85 @@ class Base:
         self.params = params
         self.params_dict = {k:v for k, v in zip(self.param_names, params)}
 
-
-    def _get_objective_func(self, *data):
-        return lambda params: -1 * self._log_likelihood(*data, *params)
-    
+    # has to handle multiple datapoints because bivariate copulas have two data inputs
 
     def _fit(self, f, initial_param_guess, param_bounds, optimizer = "Powell"):
         
         # defualt mle optimization (aka canonical likelihood implementation)
         return minimize(f, initial_param_guess, bounds = param_bounds, method = optimizer)
+    
+    def _get_objective_func(self, *data):
+        return lambda params: -1 * self._log_likelihood(*data, *params)
+    
+
+    def _get_gradient_func(self, opt_params_arr):
+        return lambda data: approx_fprime(opt_params_arr, lambda params: self._log_likelihood(*data, *params), epsilon = 1e-8)
+    
+
+    def _get_inv_hessian_matrix(self, opt_params_arr, objective_func):
+        return np.linalg.inv(approx_hess3(opt_params_arr, objective_func))
+    
+
+    def _se_from_matrix(self, matrix):
+        return np.sqrt(np.diag(matrix))
+    
+
+    def _get_se(self, opt_params_arr, objective_func):
+        return self._se_from_matrix(self._get_inv_hessian_matrix(opt_params_arr, objective_func))
+    
+
+    def _get_robust_se(self, data_arr, opt_params_arr, objective_func):
+
+        inv_hess_matrix = self._get_inv_hessian_matrix(opt_params_arr, objective_func)
+        
+        grad_func = self._get_gradient_func(opt_params_arr)
+
+        S = np.zeros((len(opt_params_arr), len(opt_params_arr)))
+
+        if data_arr.ndim == 1:
+            data_arr = data_arr.reshape(-1, 1)
+
+        for x in data_arr:
+            score_vec = grad_func(x)
+            S += np.outer(score_vec, score_vec)
+
+        return self._se_from_matrix(inv_hess_matrix @ S @ inv_hess_matrix)
 
 
-    def _post_process_fit(self, opt_params, objective_func, n):
+
+    def _post_process_fit(self, data_arr, opt_params_arr, objective_func, robust_cov = True):
         
         self.is_fit = True
-        self.LL = -1 * objective_func(opt_params)
+        self.LL = -1 * objective_func(opt_params_arr)
+        self.robust_cov = robust_cov
 
         # saving most recent 
-        self.k = len(opt_params)
-        self.n = n
+        self.k = len(opt_params_arr)
+        self.n = len(data_arr)
 
         self.aic = 2 * self.k - self.LL
         self.bic = 2 * np.log(self.n) - 2 * self.LL
 
-        self.hess_matrix = approx_hess3(opt_params, objective_func)
+        if robust_cov:
+            self.se = self._get_robust_se(data_arr, opt_params_arr, objective_func)
+        else:
+            self.se = self._get_se(opt_params_arr, objective_func)
 
-        self.se = np.sqrt(np.diag(np.linalg.inv(self.hess_matrix)))
+        t_factor = stats.t.ppf(0.975, df = self.n)
 
-        t_factor = stats.t.ppf(0.975, df = n)
-
+        # 95% confidence intervals
         self.conf_int = np.array([
-            opt_params - self.se * t_factor, # lower
-            opt_params + self.se * t_factor, # upper
+            opt_params_arr - self.se * t_factor, # lower
+            opt_params_arr + self.se * t_factor, # upper
             
         ]).T
 
         # initial param guess is assumed to be null hypothesis param (or independence)
-        self.t = (opt_params - np.array(self.initial_param_guess)) / self.se
-        self.p = 2 * stats.t.sf(np.abs(self.t), df = n - self.k)
+        self.t = (opt_params_arr - np.array(self.initial_param_guess)) / self.se
+        self.p = 2 * stats.t.sf(np.abs(self.t), df = self.n - self.k)
 
         # setting params
-        self._set_params(tuple(opt_params))
+        self._set_params(tuple(opt_params_arr))
 
 
     def summary(self):
@@ -94,8 +132,6 @@ class Base:
 
         if not self.is_fit:
             raise SyntaxError
-        
-        
 
         top_left, top_right = self._get_top_summary_table()
 
@@ -121,7 +157,7 @@ class Base:
             return smry
     
         data = []
-        for i, (param, guess, std_err, t_val, p_val, ci) in enumerate(zip(self.params, self.initial_param_guess, self.se, self.t, self.p, self.conf_int)):
+        for _, (param, guess, std_err, t_val, p_val, ci) in enumerate(zip(self.params, self.initial_param_guess, self.se, self.t, self.p, self.conf_int)):
             data.append([
                 utils.format_func(param, 2, 4),
                 utils.format_func(std_err, 10, 4),
@@ -142,7 +178,8 @@ class Base:
             txt_fmt=fmt_params_table
         )
         smry.tables.append(param_table)
-        extra_text = ["Covariance Method: robust",]
+        #extra_text = ["Covariance Method: robust",]
+        extra_text = ["Covariance Method: {}".format("robust" if self.robust_cov else "classical")]
         smry.add_extra_txt(extra_text)
         return smry
 
