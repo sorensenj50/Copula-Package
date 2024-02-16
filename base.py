@@ -23,13 +23,14 @@ class Base:
 
         self.k = len(params)
         self.is_fit = False
+        self.robust_cov = None
 
         # these variables are calculated post-fit
         # initializing them here for clarity of what variables are included in this object
-        self.n = None
-        self.LL = None; self.aic = None; self.bic = None
-        self.hess_matrix = np.array([]); self.se = np.array([])
-        self.conf_int = np.array([]); self.t = np.array([]); self.p = np.array([])
+        self.n = np.nan
+        self.LL = np.nan; self.aic = np.nan; self.bic = np.nan
+        self.hess_matrix = np.full((self.k, self.k), np.nan); self.se = np.full(self.k, np.nan)
+        self.conf_int = np.full((self.k, 2), np.nan); self.t = np.full(self.k, np.nan); self.p = np.full(self.k, np.nan)
 
 
     def _validate_params(self, params, param_names, param_bounds):
@@ -73,7 +74,7 @@ class Base:
     def _get_robust_se(self, data_arr, opt_params_arr, objective_func):
 
         inv_hess_matrix = self._get_inv_hessian_matrix(opt_params_arr, objective_func)
-        
+
         grad_func = self._get_gradient_func(opt_params_arr)
 
         S = np.zeros((len(opt_params_arr), len(opt_params_arr)))
@@ -130,9 +131,6 @@ class Base:
 
         # if not fit, raise error
 
-        if not self.is_fit:
-            raise SyntaxError
-
         top_left, top_right = self._get_top_summary_table()
 
         stubs = []; vals = []
@@ -179,8 +177,9 @@ class Base:
         )
         smry.tables.append(param_table)
         #extra_text = ["Covariance Method: robust",]
-        extra_text = ["Covariance Method: {}".format("robust" if self.robust_cov else "classical")]
-        smry.add_extra_txt(extra_text)
+        if self.robust_cov is not None:
+            smry.add_extra_txt(["Covariance Method: {}".format("robust" if self.robust_cov else "classical")]) 
+        
         return smry
 
 
