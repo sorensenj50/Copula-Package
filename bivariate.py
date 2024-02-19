@@ -128,14 +128,14 @@ class BivariateCopula(base.Base):
             return brentq(f, a = adj, b = 1 - adj)
 
         if utils.is_number(u1) and utils.is_number(q):
-            return F(u1, q)
+            return F(u1, q, *params)
 
 
         # flattening to handle any shape
         # handling case of non np array input (list, etc)
+        out_shape = u1.shape
         u1_flat = np.array(u1).flatten(); q_flat = np.array(q).flatten()
-        out_shape = u1_flat.shape
-        u2 = [F(u1, q) for u1, q in zip(u1_flat, q_flat)]
+        u2 = [F(u1, q, *params) for u1, q in zip(u1_flat, q_flat)]
         
         # reshaping
         return np.array(u2).reshape(out_shape)
@@ -204,7 +204,7 @@ class Independent(BivariateCopula):
     def __init__(self):
         super().__init__(model_name = "Independent", initial_param_guess = [],
                          param_bounds = [], param_names = [], 
-                         param_rng_funcs = [lambda *x: None], params = [])
+                         params = [])
         
     def _logpdf(self, u1, u2):
         return np.zeros_like(u1)
@@ -248,7 +248,7 @@ class Normal(Elliptical):
     def __init__(self, Q = 0, adj = 1e-4):
         super().__init__(model_name = "Normal", initial_param_guess = [0], 
                          param_bounds = [(-1 + adj, 1 - adj)], param_names = ("Q",), 
-                         param_rng_funcs = [base.rng_uniform_bounds],  params = (Q,))
+                         params = (Q,))
         
     
     def _distance(self, z1, z2, Q):
@@ -293,8 +293,7 @@ class StudentsT(Elliptical):
     def __init__(self, df = 30, Q = 0, adj = 1e-4, df_upper_bound = 100):
         super().__init__(model_name = "StudentsT", initial_param_guess = [30, 0], 
                          param_bounds = [(1, df_upper_bound), (-1 + adj, 1 - adj)], 
-                         param_names = ("df", "Q"), 
-                         param_rng_funcs = [base.rng_exp_df, base.rng_uniform_bounds], params = (df, Q))
+                         param_names = ("df", "Q"), params = (df, Q))
 
 
     def _distance(self, z1, z2, Q):
@@ -362,8 +361,7 @@ class Archimedean(BivariateCopula):
 class Clayton(Archimedean):
     def __init__(self, alpha = 1e-4, rotate_u1 = False, rotate_u2 = False, adj = 1e-4):
         super().__init__(rotate_u1, rotate_u2, model_name = "Clayton", initial_param_guess = [adj],
-                         param_bounds = [(adj, np.inf)], param_names = ("alpha",),
-                         param_rng_funcs = [base.rng_exp], params = (alpha,))
+                         param_bounds = [(adj, np.inf)], param_names = ("alpha",), params = (alpha,))
 
     
     def _cdf(self, u1, u2, alpha):
@@ -394,7 +392,7 @@ class Gumbel(Archimedean):
     def __init__(self, delta = 1):
         super().__init__(model_name = "Gumbel", initial_param_guess = [1], 
                          param_bounds = [(1, np.inf)], param_names = ("delta",),
-                         param_rng_funcs = [base.rng_exp], params = (delta,))
+                        params = (delta,))
 
 
     def _A(self, u1, u2, delta):
@@ -433,7 +431,7 @@ class Gumbel(Archimedean):
 
 
 
-class Mixture(BivariateCopula):
+class NormalMixture(BivariateCopula):
     def __init__(self, p1 = 0.5, p2 = 0.5, Q1 = 0.5, Q2 = -0.5, adj = 1e-4):
 
         # case if lengths of p and Q disagree / with n_normals
@@ -444,13 +442,6 @@ class Mixture(BivariateCopula):
         super().__init__("Mixture", [],
                          [(adj, 1 - adj), (adj, 1 - adj), (-1 + adj, 1 - adj), (-1 + adj, 1 - adj)],
                          ["p1", "p2", "Q1", "Q2"], [p1, p2, Q1, Q2])
-        
-
-    def _set_params(self, p1, p2, Q1, Q2):
-        
-        # double checking normalization
-        p1, p2 = self._normalize_p(p1, p2)
-        self.params = (p1, p2, Q1, Q2)
         
 
     def _get_weighted_obj_func(self, u1, u2, weights, copula):
@@ -554,7 +545,7 @@ class Mixture(BivariateCopula):
         return p1 * self.base_model._cdf(u1, u2, Q1) + p2 * self.base_model._cdf(u1, u2, Q2)
     
 
-    def _condtional_cdf(self, u1, u2, p1, p2, Q1, Q2):
+    def _conditional_cdf(self, u1, u2, p1, p2, Q1, Q2):
         # cdf of u2 conditioned on u1
 
         z1 = stats.norm.ppf(u1); z2 = stats.norm.ppf(u2)
@@ -563,7 +554,7 @@ class Mixture(BivariateCopula):
         denom1 = self.base_model._scale_factor(Q1)
         denom2 = self.base_model._scale_factor(Q2)
 
-        return self.p1 * stats.norm.cdf(num1 / denom1) + self.p2 * stats.norm.cdf(num2 / denom2)
+        return p1 * stats.norm.cdf(num1 / denom1) + p2 * stats.norm.cdf(num2 / denom2)
     
 
     def simulate(self, n = 1000, seed = None):
@@ -581,6 +572,12 @@ class Mixture(BivariateCopula):
             u2[i] = self.base_copula._conditional_quantile(u1[i], q[i], Q)
 
         return u1, u2
+    
+    def _kendall_tau(self, *params):
+        return np.nan
+    
+    def _spearman_rho(self, *params):
+        return np.nan
 
     
     

@@ -103,7 +103,7 @@ class Normal(Marginal):
         # the order of these params depends on SciPy
         super().__init__(stats.norm, model_name = "Normal", initial_param_guess = [0, 1], 
                         param_bounds = [(-np.inf, np.inf), (adj, np.inf)], param_names = ["mu", "sigma"],
-                        param_rng_funcs = [base.rng_mean, base.rng_exp_scale], params = [mu, sigma])
+                        params = [mu, sigma])
 
 
 
@@ -113,7 +113,7 @@ class StudentsT(Marginal):
         # the order of these params depends on SciPy
         super().__init__(stats.t, model_name = "StudentT", initial_param_guess = [30, 0, 1], 
                         param_bounds = [(1, np.inf), (-np.inf, np.inf), (adj, np.inf)], param_names = ["df", "mu", "sigma"],
-                        param_rng_funcs = [base.rng_exp_df, base.rng_mean, base.rng_exp_scale], params = [df, mu, sigma])
+                        params = [df, mu, sigma])
         
 
 
@@ -122,7 +122,7 @@ class StandardSkewedT(Marginal):
         super().__init__(None, model_name = "SkewedStudentsT", 
                          initial_param_guess = [30, 0], param_names = ["eta", "lam"],
                          param_bounds = [(2 + adj, np.inf), (-1 + adj, 1 - adj)],
-                         param_rng_funcs = [base.rng_exp_df, base.rng_uniform_bounds], params = [eta, lam])
+                         params = [eta, lam])
         
 
     def _get_ABC(self, eta, lam):
@@ -203,7 +203,7 @@ class GaussianKDE(Marginal):
         self.bw_method_desc = self.get_bw_method_desc(self.bw_method)
 
         super().__init__(None, model_name = "GaussianKDE", initial_param_guess = [], param_names = [],
-                         param_bounds = [], param_rng_funcs = [], params = [])
+                         param_bounds = [], params = [])
     
     def fit(self, x):
         # check that univariate

@@ -10,14 +10,13 @@ from statsmodels.iolib.table import SimpleTable
 
 
 class Base:
-    def __init__(self, model_name, initial_param_guess, param_bounds, param_names, param_rng_funcs, params):
+    def __init__(self, model_name, initial_param_guess, param_bounds, param_names, params):
 
         self.model_name = model_name
 
         self.initial_param_guess = initial_param_guess
         self.param_bounds = param_bounds
         self.param_names = param_names
-        self.param_rng_funcs = param_rng_funcs
 
         self._validate_params(params, param_names, param_bounds)
         self._set_params(params)
@@ -44,16 +43,6 @@ class Base:
     def _set_params(self, params):
         self.params = params
         self.params_dict = {k:v for k, v in zip(self.param_names, params)}
-
-    
-    def _generate_random_params(self, data, rng, n = 100):
-        rng_arr = np.zeros((n, self.k))
-
-        for i in range(self.k):
-            rng_arr[:, i] = self.param_rng_funcs[i](self, data, i, rng, n = n)
-
-        return rng_arr.tolist()
-
 
 
     # has to handle multiple datapoints because bivariate copulas have two data inputs
@@ -209,23 +198,3 @@ class Base:
             title="{} Parameter Estimates".format(model_name) if model_name is not None else "Parameter Estimatess",
             txt_fmt=fmt_params_table
         )
-
-    
-
-
-# random parameter generation funcs
-
-def rng_uniform_bounds(model_obj, data, i, rng, n = 100):
-    return rng.uniform(model_obj.param_bounds[i][0], model_obj.param_bounds[i][1], size = n)
-
-def rng_mean(model_obj, data, i, rng, n = 100):
-    return rng.normal(loc = np.mean(data), scale = np.std(data), size = n)
-
-def rng_exp_scale(model_obj, data, i, rng, n = 100):
-    return rng.exponential(scale = np.std(data), size = n)
-
-def rng_exp_df(model_obj, data, i, rng, n = 100):
-    return rng.exponential(scale = 20, size = n) + 1e-4
-
-def rng_exp_archimedean(model_obj, data, i, rng, n = 100):
-    return rng.exponential(scale = 0.5, size = n) + 1e-4

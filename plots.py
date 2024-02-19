@@ -32,7 +32,7 @@ def copula_3d_surf(copula_obj, ax = None, adj = 1e-2, range_num = 100, cmap = "v
 
 def copula_contour(copula_obj, ax = None, adj = 1e-2, range_num = 100, cmap = "viridis", num_levels = 5, level_sum = "cumulative", fill = False, color = None, label = True, **kwargs):
 
-    check_copula_obj(copula_obj)
+    #check_copula_obj(copula_obj)
 
     u1, u2 = utils.get_u_grid(adj = adj, range_num=range_num) 
     density = copula_obj.pdf(u1, u2)
@@ -86,7 +86,7 @@ def cumulative_level(density):
 
 def copula_quantile_curves(copula_obj, ax = None, quantiles = [0.95, 0.75, 0.5, 0.25, 0.05], adj = 1e-4, range_num = 100):
 
-    check_copula_obj(copula_obj)
+    #check_copula_obj(copula_obj)
 
     u = utils.get_u_range(adj = adj, range_num = range_num)
     u1, q = np.meshgrid(u, quantiles)
