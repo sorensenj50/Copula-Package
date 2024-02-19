@@ -1,12 +1,12 @@
 import utils
-from base import Base
+import base
 
 import numpy as np
 from scipy import stats
 from scipy.special import gamma
 from datetime import datetime
 
-class Marginal(Base):
+class Marginal(base.Base):
     def __init__(self, rv_obj, *args, **kwargs):
 
         self.rv_obj = rv_obj
@@ -22,7 +22,6 @@ class Marginal(Base):
             return x_or_u
         
         return utils.clip_u_input(x_or_u, adj = adj)
-
 
     # WRAPPER / EXTERNAL functions
 
@@ -98,14 +97,13 @@ class Marginal(Base):
 
 
 
-
 class Normal(Marginal):
     def __init__(self, mu = 0, sigma = 1, adj = 1e-4):
 
         # the order of these params depends on SciPy
         super().__init__(stats.norm, model_name = "Normal", initial_param_guess = [0, 1], 
                         param_bounds = [(-np.inf, np.inf), (adj, np.inf)], param_names = ["mu", "sigma"],
-                         params = [mu, sigma])
+                        param_rng_funcs = [base.rng_mean, base.rng_exp_scale], params = [mu, sigma])
 
 
 
@@ -114,8 +112,8 @@ class StudentsT(Marginal):
        
         # the order of these params depends on SciPy
         super().__init__(stats.t, model_name = "StudentT", initial_param_guess = [30, 0, 1], 
-                        param_bounds = [(1, np.inf), (-np.inf, np.inf), (adj, np.inf)], param_names = ["df", "mean", "stdev"],
-                         params = [df, mu, sigma])
+                        param_bounds = [(1, np.inf), (-np.inf, np.inf), (adj, np.inf)], param_names = ["df", "mu", "sigma"],
+                        param_rng_funcs = [base.rng_exp_df, base.rng_mean, base.rng_exp_scale], params = [df, mu, sigma])
         
 
 
@@ -124,8 +122,9 @@ class StandardSkewedT(Marginal):
         super().__init__(None, model_name = "SkewedStudentsT", 
                          initial_param_guess = [30, 0], param_names = ["eta", "lam"],
                          param_bounds = [(2 + adj, np.inf), (-1 + adj, 1 - adj)],
-                         params = [eta, lam])
+                         param_rng_funcs = [base.rng_exp_df, base.rng_uniform_bounds], params = [eta, lam])
         
+
     def _get_ABC(self, eta, lam):
         C = gamma((eta + 1) / 2) / (np.sqrt(np.pi * (eta - 2))  * gamma(eta / 2))
         A = 4 * lam * C * (eta - 2) / (eta - 1)
@@ -133,6 +132,7 @@ class StandardSkewedT(Marginal):
 
         return A, B, C
     
+
     def _logpdf(self, x, eta, lam):
 
         #z = (x - mu) / sigma
@@ -190,7 +190,8 @@ class StandardSkewedT(Marginal):
     
 
   
-
+# need to create sub class to distinguish GaussianKDE as this cannot be used in Mixture Models
+        
 
 class GaussianKDE(Marginal):
     def __init__(self, bw_method = None):
@@ -202,7 +203,7 @@ class GaussianKDE(Marginal):
         self.bw_method_desc = self.get_bw_method_desc(self.bw_method)
 
         super().__init__(None, model_name = "GaussianKDE", initial_param_guess = [], param_names = [],
-                         param_bounds = [], params = [])
+                         param_bounds = [], param_rng_funcs = [], params = [])
     
     def fit(self, x):
         # check that univariate
@@ -248,14 +249,13 @@ class GaussianKDE(Marginal):
         top_left = [
             ("Model Name:", self.model_name), 
             ("Method:", self.bw_method_desc),("Num. Params:", 1), ("Num. Obs:", self.n),
-            ("Date:", now.strftime("%a, %b %d %Y")),("Time:", now.strftime("%H:%M:%S")), ("", ""), ("", ""),
+            ("Date:", now.strftime("%a, %b %d %Y")),("Time:", now.strftime("%H:%M:%S")), ("", ""),
         ]
 
         top_right = [
             ("Bandwidth", utils.format_func(self.kde.factor, 10, 4)), ("Log-Likelihood:", utils.format_func(self.LL, 10, 4)), 
             ("AIC:", utils.format_func(self.aic, 10, 4)),
             ("BIC:", utils.format_func(self.bic, 10, 4)), (" ", " "), (" ", " "), (" ", " "),
-            ("", ""),
         ]
 
         return top_left, top_right

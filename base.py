@@ -10,13 +10,14 @@ from statsmodels.iolib.table import SimpleTable
 
 
 class Base:
-    def __init__(self, model_name, initial_param_guess, param_bounds, param_names, params):
+    def __init__(self, model_name, initial_param_guess, param_bounds, param_names, param_rng_funcs, params):
 
         self.model_name = model_name
 
         self.initial_param_guess = initial_param_guess
         self.param_bounds = param_bounds
         self.param_names = param_names
+        self.param_rng_funcs = param_rng_funcs
 
         self._validate_params(params, param_names, param_bounds)
         self._set_params(params)
@@ -44,19 +45,30 @@ class Base:
         self.params = params
         self.params_dict = {k:v for k, v in zip(self.param_names, params)}
 
+    
+    def _generate_random_params(self, data, rng, n = 100):
+        rng_arr = np.zeros((n, self.k))
+
+        for i in range(self.k):
+            rng_arr[:, i] = self.param_rng_funcs[i](self, data, i, rng, n = n)
+
+        return rng_arr.tolist()
+
+
+
     # has to handle multiple datapoints because bivariate copulas have two data inputs
 
     def _fit(self, f, initial_param_guess, param_bounds, optimizer = "Powell"):
-        
         # defualt mle optimization (aka canonical likelihood implementation)
         return minimize(f, initial_param_guess, bounds = param_bounds, method = optimizer)
     
+
     def _get_objective_func(self, *data):
         return lambda params: -1 * self._log_likelihood(*data, *params)
     
 
     def _get_gradient_func(self, opt_params_arr):
-        return lambda data: approx_fprime(opt_params_arr, lambda params: self._log_likelihood(*data, *params), epsilon = 1e-8)
+        return lambda data: approx_fprime(opt_params_arr, lambda params: self._log_likelihood(*data, *params), epsilon = 1e-5)
     
 
     def _get_inv_hessian_matrix(self, opt_params_arr, objective_func):
@@ -75,7 +87,10 @@ class Base:
 
         inv_hess_matrix = self._get_inv_hessian_matrix(opt_params_arr, objective_func)
 
+        print(inv_hess_matrix)
+
         grad_func = self._get_gradient_func(opt_params_arr)
+
 
         S = np.zeros((len(opt_params_arr), len(opt_params_arr)))
 
@@ -88,6 +103,12 @@ class Base:
 
         return self._se_from_matrix(inv_hess_matrix @ S @ inv_hess_matrix)
 
+    def _get_aic(self, LL, k):
+        return 2 * k - LL
+    
+
+    def _get_bic(self, LL, n):
+        return 2 * np.log(n) - 2 * LL
 
 
     def _post_process_fit(self, data_arr, opt_params_arr, objective_func, robust_cov = True):
@@ -124,8 +145,11 @@ class Base:
         # setting params
         self._set_params(tuple(opt_params_arr))
 
-
     def summary(self):
+        return self._summary([self], [None])
+
+
+    def _summary(self, model_objects, model_names):
         # returns a printable "statsmodel like" summary of the model
         # I heavily relied on the code from the Arch package which also used the statsmodel iolibrary to implement a summary
 
@@ -153,9 +177,19 @@ class Base:
 
         if len(self.params) <= 0:
             return smry
+
+        for model_obj, model_name in zip(model_objects, model_names):
+            smry.tables.append(self.make_summary_table(model_obj, model_name, fmt_params))
+        
+        #extra_text = ["Covariance Method: robust",]
+        #if self.robust_cov is not None:
+        #     smry.add_extra_txt(["Covariance Method: {}".format("robust" if self.robust_cov else "classical")]) 
+        
+        return smry
     
+    def make_summary_table(self, model_obj, model_name, fmt_params):
         data = []
-        for _, (param, guess, std_err, t_val, p_val, ci) in enumerate(zip(self.params, self.initial_param_guess, self.se, self.t, self.p, self.conf_int)):
+        for _, (param, guess, std_err, t_val, p_val, ci) in enumerate(zip(model_obj.params, model_obj.initial_param_guess, model_obj.se, model_obj.t, model_obj.p, model_obj.conf_int)):
             data.append([
                 utils.format_func(param, 2, 4),
                 utils.format_func(std_err, 10, 4),
@@ -168,19 +202,30 @@ class Base:
         fmt_params_table = fmt_params.copy()
         fmt_params_table["colwidths"] = 8
 
-        param_table = SimpleTable(
+        return SimpleTable(
             data,
             headers=["coef", "std err", "h0", "t", "P>|t|", "95% Conf. Int."],
-            stubs=self.param_names,
-            title="Parameter Estimates",
+            stubs=model_obj.param_names,
+            title="{} Parameter Estimates".format(model_name) if model_name is not None else "Parameter Estimatess",
             txt_fmt=fmt_params_table
         )
-        smry.tables.append(param_table)
-        #extra_text = ["Covariance Method: robust",]
-        if self.robust_cov is not None:
-            smry.add_extra_txt(["Covariance Method: {}".format("robust" if self.robust_cov else "classical")]) 
-        
-        return smry
-
 
     
+
+
+# random parameter generation funcs
+
+def rng_uniform_bounds(model_obj, data, i, rng, n = 100):
+    return rng.uniform(model_obj.param_bounds[i][0], model_obj.param_bounds[i][1], size = n)
+
+def rng_mean(model_obj, data, i, rng, n = 100):
+    return rng.normal(loc = np.mean(data), scale = np.std(data), size = n)
+
+def rng_exp_scale(model_obj, data, i, rng, n = 100):
+    return rng.exponential(scale = np.std(data), size = n)
+
+def rng_exp_df(model_obj, data, i, rng, n = 100):
+    return rng.exponential(scale = 20, size = n) + 1e-4
+
+def rng_exp_archimedean(model_obj, data, i, rng, n = 100):
+    return rng.exponential(scale = 0.5, size = n) + 1e-4

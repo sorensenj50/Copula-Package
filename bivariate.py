@@ -1,5 +1,5 @@
 import utils
-from base import Base
+import base
 
 import numpy as np
 from scipy import stats
@@ -9,8 +9,12 @@ from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
 
 
-
-class BivariateCopula(Base):
+class BivariateCopula(base.Base):
+    def __init__(self, *args, **kwargs):
+        self.summary_title = "Bivariate Copula"
+        super().__init__(*args, **kwargs)
+        self.tau = self._kendall_tau(*self.params)
+        self.rho = self._spearman_rho(*self.params)
     
     def _handle_u_input(self, u, adj):
         if not (utils.is_arraylike(u) or utils.is_number(u)):
@@ -42,152 +46,14 @@ class BivariateCopula(Base):
     
     def _reshape_wrapper(self, u1, u2, f, *params):
         # if u1 and u2 are arrays, ensures flat input and reshapes after applying function
-
         # because of earlier validation, if 1 is array, then both are
+
         if utils.is_arraylike(u1):
             out_shape = u1.shape
             return f(u1.flatten(), u2.flatten(), *params).reshape(out_shape)
 
         return f(u1, u2, *params)
     
-
-class NormalMixture(BivariateCopula):
-    def __init__(self, p1 = 0.5, p2 = 0.5, Q1 = 0.5, Q2 = -0.5, adj = 1e-4):
-        self.summary_title = "Bivariate Copula"
-        self.base_copula = Normal()
-        p1, p2 = self._normalize_p(p1, p2)
-
-        super().__init__("NormalMixture", [np.nan, np.nan, np.nan, np.nan],
-                         [(adj, 1 - adj), (adj, 1 - adj), (-1 + adj, 1 - adj), (-1 + adj, 1 - adj)],
-                         ["p1", "p2", "Q1", "Q2"], [p1, p2, Q1, Q2])
-        
-    def _get_weighted_obj_func(self, u1, u2, weights, copula):
-        return lambda params: -np.sum(weights * copula._logpdf(u1, u2, *params))
-    
-    def _normalize_p(self, p1, p2):
-        return p1 / (p1 + p2), p2 / (p1 + p2)
-
-
-    def fit(self, u1, u2, initial_params_guess = None, seed = None, n_init = 20, tol = 1e-4, max_iter = 100):
-        # em algo
-
-        if initial_params_guess is not None:
-            p1, p2, Q1, Q2, LL =  self._run_em_algo(u1, u2, *initial_params_guess, tol = tol, max_iter = max_iter)
-        
-        else:
-            rng = np.random.default_rng(seed = seed)
-            random_p1 = rng.uniform(0, 1, size = n_init)
-            random_p2 = 1 - random_p1
-            random_Q1 = rng.uniform(-1, 1, size = n_init)
-            random_Q2 = -1 * random_Q1
-            results_arr = np.zeros(shape = (n_init, 5))
-
-            with ProcessPoolExecutor() as executor:
-                futures = [executor.submit(self._run_em_algo, u1, u2, random_p1[i], random_p2[i], random_Q1[i], random_Q2[i], 
-                                             tol = tol, max_iter = max_iter) for i in range(n_init)]
-
-            for i, future in enumerate(futures):
-                results_arr[i] = list(future.result())
-
-            optimal_row = np.argmin(results_arr[:, -1])
-            p1, p2, Q1, Q2, LL = results_arr[optimal_row]
-
-
-        return p1, p2, Q1, Q2, LL
-                
-
-
-
-    def _run_em_algo(self, u1, u2, p1, p2, Q1, Q2, tol = 1e-4, max_iter = 100, m_method = "MLE", stop_criteria = "params"):
-
-        # takes input data and iniitla values for parameters
-        i = 0
-
-        while i < max_iter:
-            gamma1, gamma2 = self._e_step(u1, u2, p1, p2, Q1, Q2) 
-            new_p1, new_p2, new_Q1, new_Q2, new_LL = self._m_step(u1, u2, gamma1, gamma2, Q1, Q2)
-
-
-            if stop_criteria == "params":
-                diff_arr = np.array([new_p1 - p1, new_p2 - p2, new_Q1 - Q1, new_Q2 - Q2])
-            else:
-                diff_arr = np.array([LL - new_LL])
-
-
-            if np.linalg.norm(diff_arr) < tol:
-                return new_p1, new_p2, new_Q1, new_Q2, new_LL
-            
-            # setting new variables
-            p1, p2, Q1, Q2, LL = new_p1, new_p2, new_Q1, new_Q2, new_LL
-            i += 1
-
-        # hit max iterations
-        return p1, p2, Q1, Q2, LL
-
-
-    def _e_step(self, u1, u2, p1, p2, Q1, Q2):
-        gamma1 = p1 * self.base_copula._pdf(u1, u2, Q1)
-        gamma2 = p2 * self.base_copula._pdf(u1, u2, Q2)
-        gamma_sum = gamma1 + gamma2
-
-        return gamma1 / gamma_sum, gamma2 / gamma_sum
-    
-
-    def _m_step(self, u1, u2, gamma1, gamma2, Q1, Q2, optimizer = "Powell"):
-
-        new_p1 = np.mean(gamma1)
-        new_p2 = np.mean(gamma2)
-
-        f1 = self._get_weighted_obj_func(u1, u2, gamma1, self.base_copula)
-        f2 = self._get_weighted_obj_func(u1, u2, gamma2, self.base_copula)
-
-        # use previous Q has initial guess?
-        results1 = self.base_copula._fit(f1, [Q1], self.base_copula.param_bounds, 
-                                             optimizer = optimizer)
-        
-
-        results2 = self.base_copula._fit(f2, [Q2], self.base_copula.param_bounds, 
-                                             optimizer = optimizer)
-
-        # returning new_p1, new_p2, new_Q1, new_Q2, and the total log likelihood
-        return new_p1, new_p2, results1.x[0], results2.x[0], results1.fun + results2.fun
-    
-
-    def pdf(self, u1, u2):
-        return self._pdf(u1, u2)
-
-    def _pdf(self, u1, u2):
-        # both the density and the cumulative density are probability weighted
-        return self.params_dict["p1"] * self.base_copula._pdf(u1, u2, self.params_dict["Q1"]) + self.params_dict["p2"] * self.base_copula._pdf(u1, u2, self.params_dict["Q2"])
-    
-
-    def simulate(self, n = 1000, seed = None):
-        rng = np.random.default_rng(seed = seed)
-        param_draw = rng.choice([self.params_dict["Q1"], self.params_dict["Q2"]], p = [self.params_dict["p1"], self.params_dict["p2"]], replace = True, size = n)
-
-        u1 = rng.uniform(size = n)
-        u2 = np.empty(shape = n)
-        q = rng.uniform(size = n)
-
-        for i, Q in enumerate(param_draw):
-            u2[i] = self.base_copula._conditional_quantile(u1[i], q[i], Q)
-
-        return u1, u2
-        
-
-
-
-
-    
-
-class PureCopula(BivariateCopula):
-    def __init__(self, *args, **kwargs):
-        self.summary_title = "Bivariate Copula"
-        super().__init__(*args, **kwargs)
-        self.tau = self._kendall_tau(*self.params)
-        self.rho = self._spearman_rho(*self.params)
-
-
     def _kendall_tau(self, *params):
         raise NotImplementedError
     
@@ -199,7 +65,7 @@ class PureCopula(BivariateCopula):
     def _log_likelihood(self, u1, u2, *params):
         return np.sum(self._logpdf(u1, u2, *params))
     
-
+    
     def fit(self, u1, u2, optimizer = "Powell", initial_param_guesses = None, adj = 1e-4, robust_cov = True):
 
         # input validation
@@ -217,8 +83,7 @@ class PureCopula(BivariateCopula):
 
         self._post_process_fit(utils.flatten_concatenate(u1, u2),opt_results.x, 
                                objective_func, robust_cov = robust_cov)
-
-
+        
 
     def _post_process_fit(self, opt_params, objective_func, n, robust_cov = True):
         
@@ -232,14 +97,14 @@ class PureCopula(BivariateCopula):
         top_left = [
             ("Model Name:", self.model_name), ("Model Family:", self.family_name), 
             ("Method:", "CMLE"),("Num. Params:", self.k), ("Num. Obs:", self.n),
-            ("Date:", now.strftime("%a, %b %d %Y")),("Time:", now.strftime("%H:%M:%S")), ("", ""), ("", ""),
+            ("Date:", now.strftime("%a, %b %d %Y")),("Time:", now.strftime("%H:%M:%S")), ("", ""),
         ]
 
         top_right = [
             ("Log-Likelihood:", utils.format_func(self.LL, 10, 4)), ("AIC:", utils.format_func(self.aic, 10, 4)),
             ("BIC:", utils.format_func(self.bic, 10, 4)), ("Kendall's Tau:", utils.format_func(self.tau, 10, 4)), 
             ("Spearman's Rho:", utils.format_func(self.rho, 10, 4)), ("Upper Tail Depend.:", "NA"),("Lower Tail Depend.:", "NA"),
-            ("", ""), ("", ""),
+            ("", ""),
         ]
 
         return top_left, top_right
@@ -253,32 +118,27 @@ class PureCopula(BivariateCopula):
         return self._conditional_quantile(u1, q, *self.params)
     
 
+
     def _conditional_quantile(self, u1, q, *params, adj = 1e-4):
         # default implementation of the conditional quantile function uses numerical optimization method
         # on condtional cdf
 
-        def F(u1, q):
+        def F(u1, q, *params, adj = 1e-4):
             f = lambda u2: self._conditional_cdf(u1, u2, *params) - q
             return brentq(f, a = adj, b = 1 - adj)
 
-        # both should be the same type
-        # handling scalar input
-        if utils.is_number(u1):
-            return F(u1, q)
-        
-        # array input
+
+        u1_arr = np.atleast_1d(u1)
+        q_arr = np.atleast_1d(q)
+
+        out_shape = u1_arr.shape
 
         # flattening to handle any shape
-        u1_flat = np.array(u1).flatten(); q_flat = np.array(q).flatten()
-
-        n = len(u1_flat)
-        u2_flat = np.empty(shape = n)
-
-        for i in range(n):
-            u2_flat[i] = F(u1_flat[i], q_flat[i])
+        u1_flat = u1_arr.flatten(); q_flat = q_arr.flatten()
+        u2 = [F(u1, q) for u1, q in zip(u1_flat, q_flat)]
         
         # reshaping
-        return u2_flat.reshape(u1.shape)
+        return np.array(u2).reshape(out_shape)
     
 
     def logpdf(self, u1, u2, adj = 1e-4):
@@ -337,12 +197,14 @@ class PureCopula(BivariateCopula):
         D = self._cdf(q, q, *params)
 
         return np.where(q > 0.5, (B - A + D - C) / (B - A), D / A)
+    
 
 
 class Independent(PureCopula):
     def __init__(self):
         super().__init__(model_name = "Independent", initial_param_guess = [],
-                         param_bounds = [], param_names = [], params = [])
+                         param_bounds = [], param_names = [], 
+                         param_rng_funcs = [lambda *x: None], params = [])
         
     def _logpdf(self, u1, u2):
         return np.zeros_like(u1)
@@ -362,7 +224,7 @@ class Independent(PureCopula):
 
 
 
-class Elliptical(PureCopula):
+class Elliptical(BivariateCopula):
     def __init__(self, *args, **kwargs):
         self.family_name = "Elliptical"
         super().__init__(*args, **kwargs)
@@ -386,7 +248,7 @@ class Normal(Elliptical):
     def __init__(self, Q = 0, adj = 1e-4):
         super().__init__(model_name = "Normal", initial_param_guess = [0], 
                          param_bounds = [(-1 + adj, 1 - adj)], param_names = ("Q",), 
-                         params = (Q,))
+                         param_rng_funcs = [base.rng_uniform_bounds],  params = (Q,))
         
     
     def _distance(self, z1, z2, Q):
@@ -431,7 +293,8 @@ class StudentsT(Elliptical):
     def __init__(self, df = 30, Q = 0, adj = 1e-4, df_upper_bound = 100):
         super().__init__(model_name = "StudentsT", initial_param_guess = [30, 0], 
                          param_bounds = [(1, df_upper_bound), (-1 + adj, 1 - adj)], 
-                         param_names = ("df", "Q"), params = (df, Q))
+                         param_names = ("df", "Q"), 
+                         param_rng_funcs = [base.rng_exp_df, base.rng_uniform_bounds], params = (df, Q))
 
 
     def _distance(self, z1, z2, Q):
@@ -480,7 +343,7 @@ class StudentsT(Elliptical):
     
 
 
-class Archimedean(PureCopula):
+class Archimedean(BivariateCopula):
     def __init__(self, rotate_u1, rotate_u2, *args, **kwargs):
 
         self.rotate_u1 = rotate_u1
@@ -500,7 +363,7 @@ class Clayton(Archimedean):
     def __init__(self, alpha = 1e-4, rotate_u1 = False, rotate_u2 = False, adj = 1e-4):
         super().__init__(rotate_u1, rotate_u2, model_name = "Clayton", initial_param_guess = [adj],
                          param_bounds = [(adj, np.inf)], param_names = ("alpha",),
-                         params = (alpha,))
+                         param_rng_funcs = [base.rng_exp], params = (alpha,))
 
     
     def _cdf(self, u1, u2, alpha):
@@ -531,7 +394,7 @@ class Gumbel(Archimedean):
     def __init__(self, delta = 1):
         super().__init__(model_name = "Gumbel", initial_param_guess = [1], 
                          param_bounds = [(1, np.inf)], param_names = ("delta",),
-                         params = (delta,))
+                         param_rng_funcs = [base.rng_exp], params = (delta,))
 
 
     def _A(self, u1, u2, delta):
@@ -563,9 +426,154 @@ class Gumbel(Archimedean):
 
         return log_1 + log_2 + log_3 + log_4
     
+
     def _kendall_tau(self, delta):
         return 1 - 1 / delta
     
+
+
+
+class Mixture(BivariateCopula):
+    def __init__(self, p1 = 0.5, p2 = 0.5, Q1 = 0.5, Q2 = -0.5, adj = 1e-4):
+
+        # case if lengths of p and Q disagree / with n_normals
+        self.summary_title = "Bivariate Copula"
+        p1, p2 = self._normalize_p(p1, p2)
+        self.base_model = Normal()
+
+        super().__init__("Mixture", [],
+                         [(adj, 1 - adj), (adj, 1 - adj), (-1 + adj, 1 - adj), (-1 + adj, 1 - adj)],
+                         ["p1", "p2", "Q1", "Q2"], [p1, p2, Q1, Q2])
+        
+
+    def _set_params(self, p1, p2, Q1, Q2):
+        
+        # double checking normalization
+        p1, p2 = self._normalize_p(p1, p2)
+        self.params = (p1, p2, Q1, Q2)
+        
+
+    def _get_weighted_obj_func(self, u1, u2, weights, copula):
+        return lambda params: -np.sum(weights * copula._logpdf(u1, u2, *params))
+    
+
+    def _normalize_p(self, p1, p2):
+        p_sum = p1 + p2
+        return p1 / p_sum, p2 / p_sum 
+    
+
+    def _get_random_p(self, n, rng):
+        return rng.dirichlet(np.ones(n), size = (n, 2))
+    
+
+    def _get_random_q(self, n, rng):
+        return rng.uniform(-1, 1, size = (n, 2))    
+
+
+    def fit(self, u1, u2, seed = None, n_init = 20, tol = 1e-4, max_iter = 100):
+
+        # random initilization, 
+       
+        rng = np.random.default_rng(seed = seed)
+        random_p = self._get_random_p(n_init, rng)
+        random_Q = self._get_random_q(n_init, rng)
+
+        params_arr = np.empty(shape = (n_init, 4)); LL_list = []
+
+        with ProcessPoolExecutor() as executor:
+            futures = [executor.submit(self._run_em_algo, u1, u2, random_p[i, 0], random_p[i, 1], random_Q[i, 0], random_Q[i, 1], 
+                                             tol = tol, max_iter = max_iter) for i in range(n_init)]
+
+        for i, future in enumerate(futures):
+            *params, LL = future.result()
+            params_arr[i] = list(params); LL_list.append(LL)
+
+        best_index = np.argmin(LL_list)
+        p1, p2, Q1, Q2 = params_arr[best_index]
+
+        #return p1, p2, Q1, Q2, LL_list[best_index]
+
+
+
+    def _run_em_algo(self, u1, u2, p1, p2, Q1, Q2, tol = 1e-4, max_iter = 100, m_method = "MLE"):
+
+        # takes input data and iniitla values for parameters
+        i = 0
+        LL = 0
+
+        while i < max_iter:
+            gamma1, gamma2 = self._e_step(u1, u2, p1, p2, Q1, Q2) 
+            new_p1, new_p2, new_Q1, new_Q2, new_LL = self._m_step(u1, u2, gamma1, gamma2, Q1, Q2)
+        
+            if np.abs(new_LL - LL) < tol:
+                return new_p1, new_p2, new_Q1, new_Q2, new_LL
+            
+            # setting new variables
+            p1, p2, Q1, Q2, LL = new_p1, new_p2, new_Q1, new_Q2, new_LL
+            i += 1
+
+        # hit max iterations
+        return p1, p2, Q1, Q2, LL
+
+
+    def _e_step(self, u1, u2, p1, p2, Q1, Q2):
+        gamma1 = p1 * self.base_copula._pdf(u1, u2, Q1)
+        gamma2 = p2 * self.base_copula._pdf(u1, u2, Q2)
+        gamma_sum = gamma1 + gamma2
+
+        return gamma1 / gamma_sum, gamma2 / gamma_sum
+    
+
+    def _m_step(self, u1, u2, gamma1, gamma2, Q1, Q2, optimizer = "Powell"):
+
+        new_p1 = np.mean(gamma1); new_p2 = np.mean(gamma2)
+
+        f1 = self._get_weighted_obj_func(u1, u2, gamma1, self.base_copula)
+        f2 = self._get_weighted_obj_func(u1, u2, gamma2, self.base_copula)
+
+        # use previous Q has initial guess?
+        results1 = self.base_copula._fit(f1, [Q1], self.base_copula.param_bounds, 
+                                             optimizer = optimizer)
+        
+        results2 = self.base_copula._fit(f2, [Q2], self.base_copula.param_bounds, 
+                                             optimizer = optimizer)
+
+        # returning new_p1, new_p2, new_Q1, new_Q2, and the total log likelihood
+        return new_p1, new_p2, results1.x[0], results2.x[0], -1 * (results1.fun + results2.fun)
+    
+
+    def _pdf(self, u1, u2, p1, p2, Q1, Q2):
+        return p1 * self.base_model._pdf(u1, u2, Q1) + p2 * self.base_model._pdf(u1, u2, Q2)
+    
+
+    def _logpdf(self, u1, u2, *params):
+        return np.log(self._pdf(u1, u2, *params))
+
+
+    def _cdf(self, u1, u2, p1, p2, Q1, Q2):
+        return p1 * self.base_model._cdf(u1, u2, Q1) + p2 * self.base_model._cdf(u1, u2, Q2)
+    
+    def _condtional_cdf(self, u1, u2, p1, p2, Q1, Q2):
+        # cdf of u2 conditioned on 
+
+
+    
+
+    def simulate(self, n = 1000, seed = None):
+
+        p1, p2, Q1, Q2 = self.params
+
+        rng = np.random.default_rng(seed = seed)
+        param_draw = rng.choice([Q1, Q2], p = [p1, p2], replace = True, size = n)
+
+        u1 = rng.uniform(size = n)
+        u2 = np.empty(shape = n)
+        q = rng.uniform(size = n)
+
+        for i, Q in enumerate(param_draw):
+            u2[i] = self.base_copula._conditional_quantile(u1[i], q[i], Q)
+
+        return u1, u2
 
     
     
