@@ -127,14 +127,14 @@ class BivariateCopula(base.Base):
             f = lambda u2: self._conditional_cdf(u1, u2, *params) - q
             return brentq(f, a = adj, b = 1 - adj)
 
+        if utils.is_number(u1) and utils.is_number(q):
+            return F(u1, q)
 
-        u1_arr = np.atleast_1d(u1)
-        q_arr = np.atleast_1d(q)
-
-        out_shape = u1_arr.shape
 
         # flattening to handle any shape
-        u1_flat = u1_arr.flatten(); q_flat = q_arr.flatten()
+        # handling case of non np array input (list, etc)
+        u1_flat = np.array(u1).flatten(); q_flat = np.array(q).flatten()
+        out_shape = u1_flat.shape
         u2 = [F(u1, q) for u1, q in zip(u1_flat, q_flat)]
         
         # reshaping
@@ -200,7 +200,7 @@ class BivariateCopula(base.Base):
     
 
 
-class Independent(PureCopula):
+class Independent(BivariateCopula):
     def __init__(self):
         super().__init__(model_name = "Independent", initial_param_guess = [],
                          param_bounds = [], param_names = [], 
@@ -553,10 +553,17 @@ class Mixture(BivariateCopula):
     def _cdf(self, u1, u2, p1, p2, Q1, Q2):
         return p1 * self.base_model._cdf(u1, u2, Q1) + p2 * self.base_model._cdf(u1, u2, Q2)
     
+
     def _condtional_cdf(self, u1, u2, p1, p2, Q1, Q2):
-        # cdf of u2 conditioned on 
+        # cdf of u2 conditioned on u1
 
+        z1 = stats.norm.ppf(u1); z2 = stats.norm.ppf(u2)
 
+        num1 = z2 - Q1 * z1; num2 = z2 - Q2 * z2
+        denom1 = self.base_model._scale_factor(Q1)
+        denom2 = self.base_model._scale_factor(Q2)
+
+        return self.p1 * stats.norm.cdf(num1 / denom1) + self.p2 * stats.norm.cdf(num2 / denom2)
     
 
     def simulate(self, n = 1000, seed = None):
