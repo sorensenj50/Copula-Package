@@ -17,7 +17,7 @@ class Marginal(base.Base):
     def _handle_input(self, x_or_u, is_x = True, adj = 1e-4):
         if not (utils.is_arraylike(x_or_u) or utils.is_number(x_or_u)):
             raise SyntaxError
-        
+
         if is_x:
             return x_or_u
         
@@ -41,8 +41,8 @@ class Marginal(base.Base):
         return self.rv_obj.pdf(x, *params)
 
 
-    def ppf(self, u):
-        return self._ppf(self._handle_input(u, is_x = False), *self.params)
+    def ppf(self, u, adj = 1e-4):
+        return self._ppf(self._handle_input(u, is_x = False, adj = adj), *self.params)
 
 
     def _ppf(self, x, *params):

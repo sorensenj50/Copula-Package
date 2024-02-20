@@ -15,6 +15,8 @@ class BivariateCopula(base.Base):
         super().__init__(*args, **kwargs)
         self.tau = self._kendall_tau(*self.params)
         self.rho = self._spearman_rho(*self.params)
+        self.lower_tail = self._lower_tail_dependance(*self.params)
+        self.upper_tail = self._upper_taiL_dependance(*self.params)
     
     def _handle_u_input(self, u, adj):
         if not (utils.is_arraylike(u) or utils.is_number(u)):
@@ -90,6 +92,9 @@ class BivariateCopula(base.Base):
         super()._post_process_fit(opt_params, objective_func, n, robust_cov = robust_cov)
         self.tau = self._kendall_tau(*self.params)
         self.rho = self._spearman_rho(*self.params)
+        self.lower_tail = self._lower_tail_dependance(*self.params)
+        self.upper_tail = self._upper_taiL_dependance(*self.params)
+    
 
 
     def _get_top_summary_table(self):
@@ -103,7 +108,8 @@ class BivariateCopula(base.Base):
         top_right = [
             ("Log-Likelihood:", utils.format_func(self.LL, 10, 4)), ("AIC:", utils.format_func(self.aic, 10, 4)),
             ("BIC:", utils.format_func(self.bic, 10, 4)), ("Kendall's Tau:", utils.format_func(self.tau, 10, 4)), 
-            ("Spearman's Rho:", utils.format_func(self.rho, 10, 4)), ("Upper Tail Depend.:", "NA"),("Lower Tail Depend.:", "NA"),
+            ("Spearman's Rho:", utils.format_func(self.rho, 10, 4)), ("Upper Tail Depend.:", utils.format_func(self.upper_tail, 10, 4)),
+            ("Lower Tail Depend.:", utils.format_func(self.lower_tail, 10, 4)),
             ("", ""),
         ]
 
@@ -118,14 +124,13 @@ class BivariateCopula(base.Base):
         return self._conditional_quantile(u1, q, *self.params)
     
 
-
+    # re write to use reshape wrapper
     def _conditional_quantile(self, u1, q, *params, adj = 1e-4):
         # default implementation of the conditional quantile function uses numerical optimization method
         # on condtional cdf
 
         def F(u1, q, *params, adj = 1e-4):
-            f = lambda u2: self._conditional_cdf(u1, u2, *params) - q
-            return brentq(f, a = adj, b = 1 - adj)
+            return brentq(lambda u2: self._conditional_cdf(u1, u2, *params) - q, a = adj, b = 1 - adj)
 
         if utils.is_number(u1) and utils.is_number(q):
             return F(u1, q, *params)
@@ -135,7 +140,7 @@ class BivariateCopula(base.Base):
         # handling case of non np array input (list, etc)
         out_shape = u1.shape
         u1_flat = np.array(u1).flatten(); q_flat = np.array(q).flatten()
-        u2 = [F(u1, q, *params) for u1, q in zip(u1_flat, q_flat)]
+        u2 = [F(u1, q, *params, adj = adj) for u1, q in zip(u1_flat, q_flat)]
         
         # reshaping
         return np.array(u2).reshape(out_shape)
@@ -179,24 +184,32 @@ class BivariateCopula(base.Base):
         raise NotImplementedError
     
 
-    def quantile_dependance(self, q, adj = 1e-4):
-        valid_q = self._handle_u_input(q, adj = adj)
-        return self._quantile_dependance(valid_q, adj, *self.params)
+    def _lower_tail_dependance(self, *params):
+        # the limit of "quantile dependance" when q approaches 0
+        # adjustment factor is used for q
+        raise NotImplementedError
     
 
-    def _quantile_dependance(self, q, adj, *params):
+    def _upper_taiL_dependance(self, *params):
+        # the limit of "quantile dependance" when q approaches 1
+        # adjustment factor is used for q
+        # too numerically unstable to use numerical methods
+
+        raise NotImplementedError
+
+ 
+    def quantile_dependance(self, q, adj = 1e-4):
+        # this doesn't work for scalar inputs
+        valid_q = self._handle_u_input(q, adj = adj)
+        return self._quantile_dependance(valid_q, *self.params)
+    
+
+    def _quantile_dependance(self, q, *params):
         # if q > 0.5: probability of u2 > q given u1 > q
         # if q < 0.5: probability of u2 < q given u1 < q
         # this can be thought of geometrically using the CDF
-
-        one = (np.ones(shape = q.shape) if utils.is_arraylike(q) else 1) - adj
-
-        A = self._cdf(q, one, *params)
-        B = self._cdf(one, one, *params)
-        C = self._cdf(one, q, *params)
-        D = self._cdf(q, q, *params)
-
-        return np.where(q > 0.5, (B - A + D - C) / (B - A), D / A)
+        qq_point = self._cdf(q, q, *params)
+        return np.where(q > 0.5, (1 - 2 * q + qq_point) / (1 - q), qq_point / q)
     
 
 
@@ -258,7 +271,7 @@ class Normal(Elliptical):
 
     def _cdf(self, u1, u2, Q):
         z1 = stats.norm.ppf(u1); z2 = stats.norm.ppf(u2)
-        z = np.stack([z1, z2], axis = 1)
+        z = np.stack([np.atleast_1d(z1), np.atleast_1d(z2)], axis = 1)
         return stats.multivariate_normal.cdf(z, cov = np.array([[1, Q],[Q, 1]]))
     
     
@@ -286,6 +299,14 @@ class Normal(Elliptical):
     def _spearman_rho(self, Q):
         return 6 * np.arcsin(Q / 2) / np.pi
     
+    def _lower_tail_dependance(self, *params):
+        # McNeil 2005
+        return 0
+    
+    def _upper_taiL_dependance(self, *params):
+        # McNeil 2005
+        return 0
+    
 
 
     
@@ -302,8 +323,7 @@ class StudentsT(Elliptical):
 
     def _cdf(self, u1, u2, df, Q):
         z1 = stats.t.ppf(u1, df); z2 = stats.t.ppf(u2, df)
-        z = np.stack([z1, z2], axis = 1)
-    
+        z = np.stack([np.atleast_1d(z1), np.atleast_1d(z2)], axis = 1)
         return stats.multivariate_t.cdf(z, df = df, shape = np.array([[1, Q],[Q, 1]]))
     
 
@@ -341,6 +361,21 @@ class StudentsT(Elliptical):
         return np.nan
     
 
+    def _tail_dependance(self, df, Q):
+        # McNeil 2005
+        return 2 * stats.t.cdf(-np.sqrt((df + 1) * (1 - Q) / (1 + Q)), df + 1)
+    
+
+    def _upper_taiL_dependance(self, df, Q):
+        return self._tail_dependance(df, Q)
+    
+
+    def _lower_tail_dependance(self, df, Q):
+        return self._tail_dependance(df, Q)
+    
+
+    
+
 
 class Archimedean(BivariateCopula):
     def __init__(self, rotate_u1, rotate_u2, *args, **kwargs):
@@ -355,7 +390,8 @@ class Archimedean(BivariateCopula):
 
         super().__init__(*args, **kwargs)
     
-    
+
+# closed form quantile dependance  
 
 # rotation?
 class Clayton(Archimedean):
@@ -383,6 +419,14 @@ class Clayton(Archimedean):
     
     def _kendall_tau(self, alpha):
         return alpha / (alpha + 2)
+    
+
+    def _upper_taiL_dependance(self, alpha):
+        return 0
+    
+
+    def _lower_tail_dependance(self, alpha):
+        return 2 ** (-1/alpha)
     
 
     
@@ -429,6 +473,15 @@ class Gumbel(Archimedean):
         return 1 - 1 / delta
     
 
+    def _upper_taiL_dependance(self, delta):
+        return 2 - (2 ** 1 / delta)
+
+
+    def _lower_tail_dependance(self, delta):
+        return 0
+        
+    
+
 
 
 class NormalMixture(BivariateCopula):
@@ -436,6 +489,7 @@ class NormalMixture(BivariateCopula):
 
         # case if lengths of p and Q disagree / with n_normals
         self.summary_title = "Bivariate Copula"
+        self.family_name = "Elliptical"
         p1, p2 = self._normalize_p(p1, p2)
         self.base_model = Normal()
 
@@ -573,11 +627,23 @@ class NormalMixture(BivariateCopula):
 
         return u1, u2
     
+
     def _kendall_tau(self, *params):
         return np.nan
     
+
     def _spearman_rho(self, *params):
         return np.nan
+    
+    
+    def _lower_tail_dependance(self, *params):
+        # mixture of two normals has to have 0 right?
+        return 0
+    
+
+    def _upper_taiL_dependance(self, *params):
+        # mixture of two normals has to have zero right?
+        return 0
 
     
     

@@ -103,6 +103,24 @@ def copula_quantile_curves(copula_obj, ax = None, quantiles = [0.95, 0.75, 0.5, 
 
     return ax
 
+
+def model_quantile_curves(model_obj, ax = None, quantiles = [0.95, 0.75, 0.5, 0.25, 0.05], adj = 1e-4, range_num = 100):
+
+    x = utils.get_x_range(low = model_obj.marginal1.ppf(adj), high = model_obj.marginal1.ppf(1 - adj), range_num = range_num)
+    
+    x1, q = np.meshgrid(x, quantiles)
+    curves = model_obj.conditional_quantile(x1, q, adj = adj / 10)
+
+    if ax is None:
+        f, ax = plt.subplots()
+
+    for q, curve in zip(quantiles, curves):
+        ax.plot(x, curve, label = q)
+
+    ax.legend(bbox_to_anchor = (1, 1))
+    return ax
+
+
 def rank_scatter(x1, x2, u1, u2, ax = None, x_alpha = 0.5, u_alpha = 0.5):
     
     if ax is None:
@@ -145,6 +163,8 @@ def quantile_dependance(u1, u2, copula = None, copula_label = None, show_indep =
     ax.legend(bbox_to_anchor = (1, 1))
 
     return ax
+
+
 
     
 
