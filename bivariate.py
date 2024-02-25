@@ -18,6 +18,7 @@ class BivariateCopula(base.Base):
         self.lower_tail = self._lower_tail_dependance(*self.params)
         self.upper_tail = self._upper_taiL_dependance(*self.params)
     
+
     def _handle_u_input(self, u, adj):
         if not (utils.is_arraylike(u) or utils.is_number(u)):
             # must be number or array
@@ -25,6 +26,7 @@ class BivariateCopula(base.Base):
             raise TypeError
 
         return utils.clip_u_input(u, adj)
+
 
     def _handle_uu_input(self, u1, u2, adj):
 
@@ -56,6 +58,7 @@ class BivariateCopula(base.Base):
 
         return f(u1, u2, *params)
     
+
     def _kendall_tau(self, *params):
         raise NotImplementedError
     
@@ -101,7 +104,7 @@ class BivariateCopula(base.Base):
         now = datetime.now()
         top_left = [
             ("Model Name:", self.model_name), ("Model Family:", self.family_name), 
-            ("Method:", "CMLE"),("Num. Params:", self.k), ("Num. Obs:", self.n),
+            ("Method:", "MLE"),("Num. Params:", self.k), ("Num. Obs:", self.n),
             ("Date:", now.strftime("%a, %b %d %Y")),("Time:", now.strftime("%H:%M:%S")), ("", ""),
         ]
 
@@ -129,8 +132,12 @@ class BivariateCopula(base.Base):
         # default implementation of the conditional quantile function uses numerical optimization method
         # on condtional cdf
 
+
         def F(u1, q, *params, adj = 1e-4):
-            return brentq(lambda u2: self._conditional_cdf(u1, u2, *params) - q, a = adj, b = 1 - adj)
+            f = lambda u2: self._conditional_cdf(u1, u2, *params) - q
+            #print(u1, q)
+            #print(f(u1), f(q))
+            return brentq(f, a = adj, b = 1 - adj)
 
         if utils.is_number(u1) and utils.is_number(q):
             return F(u1, q, *params)
@@ -378,106 +385,172 @@ class StudentsT(Elliptical):
 
 
 class Archimedean(BivariateCopula):
-    def __init__(self, rotate_u1, rotate_u2, *args, **kwargs):
-
-        self.rotate_u1 = rotate_u1
-        self.rotate_u2 = rotate_u2
-
-        self.u1_rotation_func = (lambda u: 1 - u) if self.rotate_u1 else (lambda u: u)
-        self.u2_rotation_func = (lambda u: 1 - u) if self.rotate_u2 else (lambda u: u)
-
+    def __init__(self, rotation = 0, *args, **kwargs):
         self.family_name = "Archimedean"
-
         super().__init__(*args, **kwargs)
+
+        self.set_rotation(rotation)
+
+
+    def set_rotation(self, rotation):
+        self._check_rotation(rotation)
+        self.rotation = rotation
+
+        if rotation > 0:
+            self.model_name += " (Rot. {})".format(self.rotation)
+        
+        # assigning rotation transformation function
+            
+        if rotation == 0:
+            self.pdf_rot_func = lambda u1, u2: (u1, u2)
+            self.cdf_rot_func = lambda u1, u2, C: C
+            self.quantile_rot_func1 = lambda u1, q: (u1, q)
+            self.quantile_rot_func2 = lambda u2: u2
+
+        elif rotation == 90:
+            self.pdf_rot_func = lambda u1, u2: (1 - u2, u1)
+            self.cdf_rot_func = lambda u1, u2, C: u1 - C
+            self.quantile_rot_func1 = lambda u1, q : (u1, 1 - q)
+            self.quantile_rot_func2 = lambda u2: 1 - u2
+
+        elif rotation == 180:
+            self.pdf_rot_func = lambda u1, u2: (1 - u1, 1 - u2)
+            self.cdf_rot_func = lambda u1, u2, C: u1 + u2 -1 + C
+            self.quantile_rot_func1 = lambda u1, q: (1 - u1, 1 - q)
+            self.quantile_rot_func2 = lambda u2: 1 - u2
+
+        elif rotation == 270:
+            self.pdf_rot_func = lambda u1, u2: (u2, 1 - u1)
+            self.cdf_rot_func = lambda u1, u2, C: u2 - C
+            self.quantile_rot_func1 = lambda u1, q: (1 - u1, q)
+            self.quantile_rot_func2 = lambda u2: u2
+        
+
+    def _check_rotation(self, rotation):
+        if rotation not in [0, 90, 180, 270]:
+            # input error
+            raise SyntaxError
+    
+
+    def _spearman_rho(self, *params):
+        return np.nan
+    
+
     
 
 # closed form quantile dependance  
 
 # rotation?
 class Clayton(Archimedean):
-    def __init__(self, alpha = 1e-4, rotate_u1 = False, rotate_u2 = False, adj = 1e-4):
-        super().__init__(rotate_u1, rotate_u2, model_name = "Clayton", initial_param_guess = [adj],
-                         param_bounds = [(adj, np.inf)], param_names = ("alpha",), params = (alpha,))
+    def __init__(self, theta = 1e-4, rotation = 0, adj = 1e-4):
+        super().__init__(rotation = rotation, model_name = "Clayton", initial_param_guess = [adj],
+                         param_bounds = [(adj, np.inf)], param_names = ("theta",), params = (theta,))
 
     
-    def _cdf(self, u1, u2, alpha):
-        return np.power((np.power(u1, -alpha) + np.power(u2, -alpha) - 1), -1/alpha)
+    def _cdf(self, u1, u2, theta):
+
+        # rotation variables if necessary
+        rot_u1, rot_u2 = self.pdf_rot_func(u1, u2)
+        C = np.power((np.power(rot_u1, -theta) + np.power(rot_u2, -theta) - 1), -1/theta)
+
+        # passng original variables for additional handling of rotation
+        return self.cdf_rot_func(u1, u2, C)
 
 
-    def _logpdf(self, u1, u2, alpha):
+    def _logpdf(self, u1, u2, theta):
+        rot_u1, rot_u2 = self.pdf_rot_func(u1, u2)
 
-        log_1 = np.log(alpha + 1)
-        log_2 = (-2 - 1/alpha) * np.log(np.power(u1, -alpha) + np.power(u2, -alpha) - 1)
-        log_3 = (-alpha - 1) * (np.log(u1) + np.log(u2))
+        log_1 = np.log(theta + 1)
+        log_2 = (-2 - 1/theta) * np.log(np.power(rot_u1, -theta) + np.power(rot_u2, -theta) - 1)
+        log_3 = (-theta - 1) * (np.log(rot_u1) + np.log(rot_u2))
 
         return log_1 + log_2 + log_3
     
 
-    def _conditional_quantile(self, u1, q, alpha):
-        return np.power((1 + np.power(u1, -alpha) * (np.power(q, -alpha/(1+alpha)) -1)), -1/alpha)
+    # how to adjust for rotation?
+    def _conditional_quantile(self, u1, q, theta):
+        rot_u1, rot_q = self.quantile_rot_func1(u1, q)
+        return self.quantile_rot_func2(np.power((1 + np.power(rot_u1, -theta) * (np.power(rot_q, -theta/(1+theta)) -1)), -1/theta))
     
     
-    def _kendall_tau(self, alpha):
-        return alpha / (alpha + 2)
+    def _kendall_tau(self, theta):
+        return theta / (theta + 2)
     
 
-    def _upper_taiL_dependance(self, alpha):
+    # how to adjust for rotation
+    def _upper_taiL_dependance(self, theta):
         return 0
     
 
-    def _lower_tail_dependance(self, alpha):
-        return 2 ** (-1/alpha)
+    def _lower_tail_dependance(self, theta):
+        return 2 ** (-1/theta)
     
 
     
 
 # rotation?
 class Gumbel(Archimedean):
-    def __init__(self, delta = 1):
-        super().__init__(model_name = "Gumbel", initial_param_guess = [1], 
-                         param_bounds = [(1, np.inf)], param_names = ("delta",),
-                        params = (delta,))
+    def __init__(self, theta = 1, rotation = 0):
+        super().__init__(rotation = rotation, model_name = "Gumbel", initial_param_guess = [1], 
+                         param_bounds = [(1, np.inf)], param_names = ("theta",),
+                         params = (theta,))
 
 
-    def _A(self, u1, u2, delta):
-        return np.power(np.power(-np.log(u1), delta) + np.power(-np.log(u2), delta), 1/delta)
+    def _A(self, u1, u2, theta):
+        return np.power(np.power(-np.log(u1), theta) + np.power(-np.log(u2), theta), 1/theta)
 
 
-    def _cdf(self, u1, u2, delta):
-        return np.exp(-self._A(u1, u2, delta))
+    def _cdf(self, u1, u2, theta):
+        # rotating inputs if necessary
+        rot_u1, rot_u2 = self.pdf_rot_func(u1, u2)
+        C = np.exp(-self._A(rot_u1, rot_u2, theta))
+
+        # final transformation on cdf using original inputs
+        return self.cdf_rot_func(u1, u2, C)
     
 
-    def _conditional_cdf(self, u1, u2, delta):
+    def _conditional_cdf(self, u1, u2, theta):
         # conditional of u2 given u1
-
         prod1 = 1/u1
-        prod2 = np.power(-np.log(u1), delta - 1)
-        prod3 = np.power(np.power(-np.log(u1), delta) + np.power(-np.log(u2), delta), (1 - delta)/delta)
-        A = self._A(u1, u2, delta)
+        prod2 = np.power(-np.log(u1), theta - 1)
+        prod3 = np.power(np.power(-np.log(u1), theta) + np.power(-np.log(u2), theta), (1 - theta)/theta)
+        return prod1 * prod2 * prod3 * np.exp(-self._A(u1, u2, theta))
+    
 
-        return prod1 * prod2 * prod3 * np.exp(-A)
+    def _conditional_quantile(self, u1, q, *params, adj=1e-4):
+        # rotation transformation
+        # then relying on brentq solver to get quantile given conditional_cdf
+
+        rot_u1, rot_q = self.quantile_rot_func1(u1, q)
+        return self.quantile_rot_func2(super()._conditional_quantile(rot_u1, rot_q, *params, adj=adj))
+    
 
 
-    def _logpdf(self, u1, u2, delta):
-        A = self._A(u1, u2, delta)
 
-        log_1 = np.log(A + delta - 1)
-        log_2 = (1-2*delta) * np.log(A)
-        log_3 = -A - (np.log(u1) + np.log(u2))
-        log_4 = (delta - 1) * (np.log(-np.log(u1)) + np.log(-np.log(u2)))
+    def _logpdf(self, u1, u2, theta):
+
+        # rotating inputs if necessary
+        rot_u1, rot_u2 = self.pdf_rot_func(u1, u2)
+
+        A = self._A(rot_u1, rot_u2, theta)
+
+        log_1 = np.log(A + theta - 1)
+        log_2 = (1-2*theta) * np.log(A)
+        log_3 = -A - (np.log(rot_u1) + np.log(rot_u2))
+        log_4 = (theta - 1) * (np.log(-np.log(rot_u1)) + np.log(-np.log(rot_u2)))
 
         return log_1 + log_2 + log_3 + log_4
     
 
-    def _kendall_tau(self, delta):
-        return 1 - 1 / delta
+    def _kendall_tau(self, theta):
+        return 1 - 1 / theta
     
+    # how to adjust for rotation
+    def _upper_taiL_dependance(self, theta):
+        return 2 - (2 ** 1 / theta)
 
-    def _upper_taiL_dependance(self, delta):
-        return 2 - (2 ** 1 / delta)
 
-
-    def _lower_tail_dependance(self, delta):
+    def _lower_tail_dependance(self, theta):
         return 0
         
     

@@ -29,13 +29,14 @@ def copula_3d_surf(copula_obj, ax = None, adj = 1e-2, range_num = 100, cmap = "v
     
     return ax
 
-
-def copula_contour(copula_obj, ax = None, adj = 1e-2, range_num = 100, cmap = "viridis", num_levels = 5, level_sum = "cumulative", fill = False, color = None, label = True, **kwargs):
+# remove optional density parameter
+def copula_contour(copula_obj, density = None, ax = None, adj = 1e-2, range_num = 100, cmap = "viridis", num_levels = 5, level_sum = "cumulative", fill = False, color = None, label = True, **kwargs):
 
     #check_copula_obj(copula_obj)
-
     u1, u2 = utils.get_u_grid(adj = adj, range_num=range_num) 
-    density = copula_obj.pdf(u1, u2)
+
+    if density is None: 
+        density = copula_obj.pdf(u1, u2)
 
     if ax is None:
         f, ax = plt.subplots()
@@ -44,9 +45,9 @@ def copula_contour(copula_obj, ax = None, adj = 1e-2, range_num = 100, cmap = "v
         density = cumulative_level(density)
 
     if fill:
-        f = ax.contourf
+        func = ax.contourf
     else:
-        f = ax.contour
+        func = ax.contour
            
     
     args = (u1, u2, density)
@@ -56,7 +57,7 @@ def copula_contour(copula_obj, ax = None, adj = 1e-2, range_num = 100, cmap = "v
         del kwargs["cmap"]
         kwargs["colors"] = color
 
-    CS = f(*args, **kwargs)
+    CS = func(*args, **kwargs)
 
     if label:
         ax.clabel(CS, inline=True, fontsize=10)
@@ -84,7 +85,7 @@ def cumulative_level(density):
     return cum.reshape(density.shape)
 
 
-def copula_quantile_curves(copula_obj, ax = None, quantiles = [0.95, 0.75, 0.5, 0.25, 0.05], adj = 1e-4, range_num = 100):
+def copula_quantile_curves(copula_obj, ax = None, quantiles = [0.95, 0.75, 0.5, 0.25, 0.05], adj = 1e-3, range_num = 100):
 
     #check_copula_obj(copula_obj)
 
@@ -107,7 +108,7 @@ def copula_quantile_curves(copula_obj, ax = None, quantiles = [0.95, 0.75, 0.5, 
 def model_quantile_curves(model_obj, ax = None, quantiles = [0.95, 0.75, 0.5, 0.25, 0.05], adj = 1e-4, range_num = 100):
 
     x = utils.get_x_range(low = model_obj.marginal1.ppf(adj), high = model_obj.marginal1.ppf(1 - adj), range_num = range_num)
-    
+
     x1, q = np.meshgrid(x, quantiles)
     curves = model_obj.conditional_quantile(x1, q, adj = adj / 10)
 
