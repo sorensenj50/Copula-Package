@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import stats
 from scipy.interpolate import interp1d
 from concurrent.futures import ProcessPoolExecutor
 
@@ -138,5 +139,5 @@ def flatten_concatenate(data1, data2):
     return np.stack([data1.flatten(), data2.flatten()], axis = 1)
 
 
-
-
+def empirical_kendall_tau(u1, u2):
+    return stats.kendalltau(u1, u2).statistic
