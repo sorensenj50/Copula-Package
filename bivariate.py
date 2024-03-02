@@ -504,6 +504,15 @@ class Archimedean(BivariateCopula):
         return self._lower_tail_rot(theta)
     
 
+    def _conditional_quantile(self, u1, q, *params, adj = 1e-4):
+        # rotation transformation
+        # then relying on brentq solver to get quantile given conditional_cdf
+        # Clayton copula implements _conditional_quantile but Gumbel and Frank do not
+
+        rot_u1, rot_q = self._quantile_rot_func1(u1, q)
+        return self._quantile_rot_func2(super()._conditional_quantile(rot_u1, rot_q, *params, adj=adj))
+    
+
     
 class Clayton(Archimedean):
     def __init__(self, theta = 1e-4, rotation = 0, adj = 1e-4):
@@ -544,7 +553,7 @@ class Clayton(Archimedean):
     
 
     def _tau_to_params(self, tau):
-        return (2 * tau * (1 / (1 - tau)),)
+        return tuple(2 * tau * (1 / (1 - tau)))
     
 
     def _unrotated_lower_tail_dependance(self, theta):
@@ -552,7 +561,7 @@ class Clayton(Archimedean):
 
 
 class Frank(Archimedean):
-    def __init__(self, theta = 1e-4, rotation = 0, adj = 1e-4):
+    def __init__(self, theta = 1e-4, rotation = 0, adj = 0):
         super().__init__(rotation = rotation, model_name = "Frank", initial_param_guess = [adj],
                          param_bounds = [(adj, np.inf)], param_names = ("theta",),
                          params = (theta,))
@@ -561,14 +570,49 @@ class Frank(Archimedean):
     def _cdf(self, u1, u2, theta):
         rot_u1, rot_u2 = self._pdf_rot_func(u1, u2)
 
-        num = (np.exp(-theta * rot_u1) - 1) * (np.exp(-theta * rot_u2) - 1)
-        denom = np.exp(-theta) - 1
+        num = self._g(rot_u1, theta) * self._g(rot_u2, theta)
+        denom = self._g(1, theta)
         C = -1/theta * np.log(1 + num / denom)
 
         return self._cdf_rot_func(u1, u2, C)
     
-    def _params_to_tau(self, theta):
-        return 
+
+    def _g(self, u, theta):
+        return np.exp(-theta * u) - 1
+    
+
+    def _pdf(self, u1, u2, theta):
+
+        rot_u1, rot_u2 = self._pdf_rot_func(u1, u2)
+
+        # independance copula as theta approaches 0
+        if theta == 0:
+            return rot_u1 * rot_u2
+        
+        num = (- theta * self._g(1, theta)) * (1 + self._g(rot_u1 + rot_u2, theta))
+        denom = np.power(self._g(rot_u1, theta) * self._g(rot_u2, theta) + self._g(1, theta), 2)
+
+        return num / denom
+    
+    def _conditional_cdf(self, u1, u2, theta):
+        
+        if theta == 0:
+            return u2
+        
+        num = self._g(u1, theta) * self._g(u2, theta) + self._g(u2, theta)
+        denom = self._g(u1, theta) * self._g(u2, theta) + self._g(1, theta)
+
+        return num / denom
+    
+    
+    def _conditional_quantile(self, u1, q, theta, adj=1e-4):
+        rot_u1, rot_q = self._quantile_rot_func1(u1, q)
+
+        denom = -theta
+        num = np.log(1 + (rot_q * self._g(1, theta)) / (1 + self._g(rot_u1, theta) * (1 - rot_q)))
+        return self._quantile_rot_func2(num / denom) 
+        
+
     
 
 
@@ -603,14 +647,6 @@ class Gumbel(Archimedean):
         return prod1 * prod2 * prod3 * np.exp(-self._A(u1, u2, theta))
     
 
-    def _conditional_quantile(self, u1, q, *params, adj = 1e-4):
-        # rotation transformation
-        # then relying on brentq solver to get quantile given conditional_cdf
-
-        rot_u1, rot_q = self._quantile_rot_func1(u1, q)
-        return self._quantile_rot_func2(super()._conditional_quantile(rot_u1, rot_q, *params, adj=adj))
-    
-
     def _logpdf(self, u1, u2, theta):
 
         # rotating inputs if necessary
@@ -631,7 +667,7 @@ class Gumbel(Archimedean):
     
 
     def _tau_to_params(self, tau):
-        return (1 / (1 - tau),)
+        return tuple(1 / (1 - tau))
 
 
     def _unrotated_upper_tail_dependance(self, theta):
