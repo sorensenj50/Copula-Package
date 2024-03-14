@@ -75,11 +75,7 @@ class Base:
     def _get_robust_se(self, data_arr, opt_params_arr, objective_func):
 
         inv_hess_matrix = self._get_inv_hessian_matrix(opt_params_arr, objective_func)
-
-        print(inv_hess_matrix)
-
         grad_func = self._get_gradient_func(opt_params_arr)
-
 
         S = np.zeros((len(opt_params_arr), len(opt_params_arr)))
 
@@ -91,6 +87,7 @@ class Base:
             S += np.outer(score_vec, score_vec)
 
         return self._se_from_matrix(inv_hess_matrix @ S @ inv_hess_matrix)
+
 
     def _get_aic(self, LL, k):
         return 2 * k - LL

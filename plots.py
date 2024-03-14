@@ -91,7 +91,7 @@ def copula_quantile_curves(copula_obj, ax = None, quantiles = [0.95, 0.75, 0.5, 
 
     u = utils.get_u_range(adj = adj, range_num = range_num)
     u1, q = np.meshgrid(u, quantiles)
-    curves = copula_obj.conditional_quantile(u1, q)
+    curves = copula_obj.conditional_ppf(u1, q)
 
     if ax is None:
         f, ax = plt.subplots()

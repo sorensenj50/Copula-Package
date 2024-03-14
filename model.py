@@ -21,7 +21,7 @@ class BivariateModel(Base):
 
     # don't need core and inner implementations because this will not have child classes
 
-    def fit(self, x1, x2, copula_fit_kwargs = {}, marginal1_fit_kwargs = {}, marginal2_fit_kwargs = {}):
+    def fit(self, x1, x2, method = "CMLE", copula_fit_kwargs = {}, marginal1_fit_kwargs = {}, marginal2_fit_kwargs = {}):
         # error handling
 
         # copula and marginals can be fit seperately
