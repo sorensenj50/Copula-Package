@@ -312,6 +312,7 @@ class Normal(Elliptical):
     
     def _distance(self, z1, z2, Q):
         # modified mahalonobis distance
+        # helper function
         return ((Q * z1) ** 2 - (2 * Q * z1 * z2) + (Q * z2) ** 2) / self._cov_det(Q)
     
 
@@ -324,19 +325,21 @@ class Normal(Elliptical):
     def _logpdf(self, u1, u2, Q):
         z1 = stats.norm.ppf(u1); z2 = stats.norm.ppf(u2)
         return -np.log(self._scale_factor(Q)) - 1/2 * self._distance(z1, z2, Q)
+    
 
+    def _conditional_cdf(self, u1, u2, Q, adj = 1e-4):
+        # adj unused but here for consistency
+        # Carol Alexander II.6.61 (correcting typo)
 
+        z1 = stats.norm.ppf(u1); z2 = stats.norm.ppf(u2)
+        return stats.norm.cdf((Q * z2 - z1) / self._scale_factor(Q))
+    
     def _conditional_ppf(self, u1, q, Q, adj = 1e-4):
         # adj unused but here for consistency
+        # Carol Alexander II.6.62
 
-        # z of conditioning variable
-        z1 = stats.norm.ppf(u1)
-
-        # z of the input quantile, given the conditioning z and their correlation
-        z2 = stats.norm.ppf(q, loc = Q * z1, scale = self._scale_factor(Q))
-
-        # back to quantile space
-        return stats.norm.cdf(z2)
+        z1 = stats.norm.ppf(u1); z2 = stats.norm.ppf(q)
+        return stats.norm.cdf(Q * z1 + self._scale_factor(Q) * z2)
     
 
     def _params_to_tau(self, Q):
@@ -392,19 +395,22 @@ class StudentsT(Elliptical):
 
         return (log_K - log_scale) + (log_numerator - log_denom)
     
-    
+
+    def _conditional_cdf(self, u1, u2, df, Q, adj = 1e-4):
+        # adj is unused, here for consistency
+        # Carol Alexander II.G.68
+        t1 = stats.t.ppf(u1, df); t2 = stats.t.ppf(u2, df)
+        return stats.t.cdf(np.sqrt((df + 1) / (df + t1 ** 2)) * ((t2 - Q * t1) / self._scale_factor(Q)), df + 1)
+
+
     def _conditional_ppf(self, u1, q, df, Q, adj = 1e-4):
-        # adj unused but here for consistency
-        # df + 1 on both distributions??
-
-        # standardized univariate t with df deg of freedom
-        z1 = stats.t.ppf(u1, df)
-        
-        # conditional standardized t distribution
-        z2 = stats.t.ppf(q, df + 1, loc = z1 * Q, scale = (self._scale_factor(Q) * np.sqrt(df + z1 **2)) / np.sqrt(df + 1))
-
-        return stats.t.cdf(z2, df + 1)
+        # Carol Alexander II.6.69
+        t1 = stats.t.ppf(u1, df); t2 = stats.t.ppf(q, df + 1)
+        return stats.t.cdf(Q * t1 + np.sqrt(self._scale_factor(Q) / (df + 1) * (df + t1 ** 2)) * t2, df)
     
+
+
+
     # Lindskog et al (2003) for tau and t 
     #def _kendall_t(self, df, Q):
     #
@@ -541,7 +547,7 @@ class Clayton(Archimedean):
 
         return log_1 + log_2 + log_3
     
-    
+
     def _conditional_cdf(self, u1, u2, theta):
         rot_u1, rot_u2 = self._cond_rot_func1(u1, u2)
 

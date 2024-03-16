@@ -70,10 +70,10 @@ class BivariateModel(Base):
         return x1, x2
     
 
-    def conditional_quantile(self, x1, q, adj = 1e-4):
+    def conditional_ppf(self, x1, q, adj = 1e-4):
 
         u1 = self.marginal1.cdf(x1)
-        u2 = self.copula.conditional_quantile(u1, q, adj = adj)
+        u2 = self.copula.conditional_ppf(u1, q, adj = adj)
         return self.marginal2.ppf(u2, adj = adj)
     
 

@@ -110,7 +110,7 @@ def model_quantile_curves(model_obj, ax = None, quantiles = [0.95, 0.75, 0.5, 0.
     x = utils.get_x_range(low = model_obj.marginal1.ppf(adj), high = model_obj.marginal1.ppf(1 - adj), range_num = range_num)
 
     x1, q = np.meshgrid(x, quantiles)
-    curves = model_obj.conditional_quantile(x1, q, adj = adj / 10)
+    curves = model_obj.conditional_ppf(x1, q, adj = adj / 10)
 
     if ax is None:
         f, ax = plt.subplots()
