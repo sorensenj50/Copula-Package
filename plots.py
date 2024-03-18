@@ -1,11 +1,11 @@
-import bivariate
+import copulas
 import utils
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 def check_copula_obj(copula_obj):
-    if not isinstance(copula_obj, bivariate.BivariateCopula):
+    if not isinstance(copula_obj, copulas.BivariateCopula):
         # create error for this
         raise SyntaxError
     

@@ -2,10 +2,7 @@ import utils
 import base
 
 import numpy as np
-from scipy import stats
-from scipy.optimize import minimize, brentq
-from scipy.special import gamma
-from scipy.integrate import quad
+from scipy import stats, optimize, integrate, special
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
 
@@ -14,23 +11,6 @@ class BivariateCopula(base.Base):
     def __init__(self, *args, **kwargs):
         self.summary_title = "Bivariate Copula"
         super().__init__(*args, **kwargs)
-
-    @property
-    def tau(self):
-        return self._params_to_tau(*self.params)
-    
-    @property
-    def rho(self):
-        return self._params_to_rho(*self.params)
-    
-    @property
-    def lower_tail(self):
-        return self._lower_tail_dependance(*self.params)
-    
-    @property
-    def upper_tail(self):
-        return self._upper_taiL_dependance(*self.params)
-
     
 
     def _handle_u_input(self, u, adj):
@@ -43,7 +23,7 @@ class BivariateCopula(base.Base):
 
 
     def _handle_uu_input(self, u1, u2, adj):
-
+        # fix this logic
 
         # u1 and u2 are both valid individually
         valid_u1 = self._handle_u_input(u1, adj)
@@ -72,6 +52,9 @@ class BivariateCopula(base.Base):
 
         return f(u1, u2, *params)
     
+    @property
+    def tau(self):
+        return self._params_to_tau(*self.params)
 
     def _tau_to_params(self, tau):
         # return a tuple
@@ -79,15 +62,30 @@ class BivariateCopula(base.Base):
     
 
     def _params_to_tau(self, *params):
-        return np.nan
-    
+        # Default is brute force numerical integration
+        # using the formulation from Joe 2.42
+        # this assumes copula is symmetric (i.e., that u1 and u2 can be swapped to the same conditional_cdf)
+        
+        n = 200
+        dudv = 1 / (n ** 2)
+        u1, u2 = utils.get_u_grid(range_num = n, adj = 1e-6)
 
-    def _rho_to_params(self, rho):
-        return (np.nan,)
+        return 1 - 4 * np.sum(self._conditional_cdf(u1, u2, *params) * self._conditional_cdf(u2, u1, *params) * dudv)
+
     
+    @property
+    def rho(self):
+        return self._params_to_rho(*self.params)
+
 
     def _params_to_rho(self, *params):
-        return np.nan
+        # Default is brute force numerical integration
+        # using the formulation from Joe 2.47
+
+        num = 200
+        dudv = 1 / (num ** 2)
+        u1, u2 = utils.get_u_grid(range_num = num, adj = 1e-6)
+        return 12 * np.sum(self._cdf(u1.flatten(), u2.flatten(), *params) * dudv) - 3
     
 
     def _log_likelihood(self, u1, u2, *params):
@@ -112,6 +110,9 @@ class BivariateCopula(base.Base):
         self._post_process_fit(utils.flatten_concatenate(u1_valid, u2_valid), opt_results.x, 
                                objective_func, robust_cov = robust_cov)
         
+        # abstract this to base?
+        self._calc_summary_info()
+        
 
     # abstract this function to fit
     def fit_mm(self, u1, u2, robust_cov = True, adj = 1e-4):
@@ -128,6 +129,7 @@ class BivariateCopula(base.Base):
     
 
     def _get_top_summary_table(self):
+
         now = datetime.now()
         top_left = [
             ("Model Name:", self.model_name), ("Model Family:", self.family_name), 
@@ -176,7 +178,7 @@ class BivariateCopula(base.Base):
 
     def conditional_cdf(self, u1, u2, adj = 1e-4):
         valid_u1, valid_u2 = self._handle_uu_input(u1, u2, adj = adj)
-        return self._conditional_cdf(u1, u2, *self.params)
+        return self._conditional_cdf(valid_u1, valid_u2, *self.params)
     
 
     def _conditional_cdf(self, u1, u2, *params):
@@ -202,7 +204,7 @@ class BivariateCopula(base.Base):
 
         def F(u1, q, *params, adj = 1e-6):
             f = lambda u2: self._conditional_cdf(u1, u2, *params) - q
-            return brentq(f, a = adj, b = 1 - adj)
+            return optimize.brentq(f, a = adj, b = 1 - adj)
 
         if utils.is_number(u1) and utils.is_number(q):
             return F(u1, q, *params)
@@ -217,12 +219,21 @@ class BivariateCopula(base.Base):
         # reshaping
         return np.array(u2).reshape(out_shape)
     
+    @property
+    def lower_tail(self):
+        return self._lower_tail_dependance(*self.params)
+
 
     def _lower_tail_dependance(self, *params):
         # the limit of "quantile dependance" when q approaches 0
         # adjustment factor is used for q
         raise NotImplementedError
     
+
+    @property
+    def upper_tail(self):
+        return self._upper_taiL_dependance(*self.params)
+
 
     def _upper_taiL_dependance(self, *params):
         # the limit of "quantile dependance" when q approaches 1
@@ -246,6 +257,7 @@ class BivariateCopula(base.Base):
     
 
     def simulate(self, n = 1000, seed = None, adj = 1e-6):
+
         rng = np.random.default_rng(seed = seed)
 
         u1 = rng.uniform(size = n)
@@ -265,18 +277,23 @@ class Independent(BivariateCopula):
     def _logpdf(self, u1, u2):
         return np.zeros_like(u1)
     
+
     def _cdf(self, u1, u2):
         return u1 * u2
     
+
     def _params_to_tau(self, *params):
         return 0
     
+
     def _params_to_rho(self, *params):
         return 0
     
+
     def _conditional_ppf(self, u1, q):
         return q
     
+
     def _conditional_cdf(self, u1, u2):
         return u2
 
@@ -334,6 +351,7 @@ class Normal(Elliptical):
         z1 = stats.norm.ppf(u1); z2 = stats.norm.ppf(u2)
         return stats.norm.cdf((Q * z2 - z1) / self._scale_factor(Q))
     
+
     def _conditional_ppf(self, u1, q, Q, adj = 1e-4):
         # adj unused but here for consistency
         # Carol Alexander II.6.62
@@ -388,7 +406,7 @@ class StudentsT(Elliptical):
         # to t variables
         z1 = stats.t.ppf(u1, df); z2 = stats.t.ppf(u2, df)
 
-        log_K = np.log(gamma((df + n) / 2)) + (n - 1) * np.log(gamma(df / 2)) + -n * np.log(gamma((df + 1) / 2))
+        log_K = np.log(special.gamma((df + n) / 2)) + (n - 1) * np.log(special.gamma(df / 2)) + -n * np.log(special.gamma((df + 1) / 2))
         log_scale = np.log(self._scale_factor(Q))
         log_numerator = (-(df + n)/2) * np.log(1 + self._distance(z1, z2, Q) / df)
         log_denom = (-(df + 1)/2) * np.log((1 + (z1 ** 2)/df) * (1 + (z2 ** 2)/df))
@@ -407,14 +425,12 @@ class StudentsT(Elliptical):
         # Carol Alexander II.6.69
         t1 = stats.t.ppf(u1, df); t2 = stats.t.ppf(q, df + 1)
         return stats.t.cdf(Q * t1 + np.sqrt(self._scale_factor(Q) / (df + 1) * (df + t1 ** 2)) * t2, df)
-    
+        
 
+    def _params_to_tau(self, df, Q):
+        # Lindskog 2003 & Carol Alexander II.6.78
+        return 2 * np.arcsin(Q) / np.pi
 
-
-    # Lindskog et al (2003) for tau and t 
-    #def _kendall_t(self, df, Q):
-    #
-    
 
     def _tail_dependance(self, df, Q):
         # McNeil 2005
@@ -459,7 +475,7 @@ class Archimedean(BivariateCopula):
             self._cdf_rot_func = lambda u1, u2, C: C
             self._cond_rot_func1 = lambda u1, q: (u1, q)
             self._cond_rot_func2 = lambda u2: u2
-            self._tau_rot_func = lambda x: x
+            self._corr_rot_func = lambda x: x
             self._upper_tail_rot = self._unrotated_upper_tail_dependance
             self._lower_tail_rot = self._unrotated_lower_tail_dependance
         
@@ -468,7 +484,7 @@ class Archimedean(BivariateCopula):
             self._cdf_rot_func = lambda u1, u2, C: u1 - C
             self._cond_rot_func1 = lambda u1, q : (u1, 1 - q)
             self._cond_rot_func2 = lambda u2: 1 - u2
-            self._tau_rot_func = lambda x: -x
+            self._corr_rot_func = lambda x: -x
             self._upper_tail_rot = self._unrotated_lower_upper_dependance
             self._lower_tail_rot = self._unrotated_upper_lower_dependance
 
@@ -477,7 +493,7 @@ class Archimedean(BivariateCopula):
             self._cdf_rot_func = lambda u1, u2, C: u1 + u2 -1 + C
             self._cond_rot_func1 = lambda u1, q: (1 - u1, 1 - q)
             self._cond_rot_func2 = lambda u2: 1 - u2
-            self._tau_rot_func = lambda x: x
+            self._corr_rot_func = lambda x: x
             self._upper_tail_rot = self._unrotated_lower_tail_dependance
             self._lower_tail_rot = self._unrotated_upper_tail_dependance
 
@@ -486,7 +502,7 @@ class Archimedean(BivariateCopula):
             self._cdf_rot_func = lambda u1, u2, C: u2 - C
             self._cond_rot_func1 = lambda u1, q: (1 - u1, q)
             self._cond_rot_func2 = lambda u2: u2
-            self._tau_rot_func = lambda x: -x
+            self._corr_rot_func = lambda x: -x
             self._upper_tail_rot = self._unrotated_upper_lower_dependance
             self._lower_tail_rot = self._unrotated_lower_upper_dependance
         
@@ -563,7 +579,7 @@ class Clayton(Archimedean):
     
     
     def _params_to_tau(self, theta):
-        return self._tau_rot_func(theta / (theta + 2))
+        return self._corr_rot_func(theta / (theta + 2))
     
 
     def _tau_to_params(self, tau):
@@ -582,13 +598,16 @@ class Frank(Archimedean):
                          params = (theta,))
         
     def _g(self, u, theta):
+        # helper function used in pdf and cdf
         return np.exp(-theta * u) - 1
     
 
-    def _D(self, theta):
-        integrand = lambda t: t / (np.exp(t) - 1)
-        integral, _ = quad(integrand, 0, theta)
-        return integral / theta
+    def _D(self, theta, k = 1):
+        # numerical implementation of order k Debye function
+
+        integrand = lambda t: np.power(t, k) / (np.exp(t) - 1)
+        integral, _ = integrate.quad(integrand, 0, theta)
+        return k * np.power(theta, -k) * integral 
 
 
     def _cdf(self, u1, u2, theta):
@@ -647,17 +666,24 @@ class Frank(Archimedean):
     
 
     def _params_to_tau(self, theta):
+        # Joe 4.5.1
+
         if theta == 0:
             return 0
 
-
-        # Dependance Modeling with Copulas, Joe 2014
-        return 1 + 4 * (1 / theta) * (self._D(theta) - 1)
-
-
+        return self._corr_rot_func(1 + 4 * (1 / theta) * (self._D(theta) - 1))
     
+    def _params_to_rho(self, theta):
+        # Joe 4.5.1
 
-# rotation?
+        if theta == 0:
+            return 0
+        
+        return self._corr_rot_func(1 + 12 / theta * (self._D(theta, k = 2) - self._D(theta, k = 1)))
+        
+
+
+
 class Gumbel(Archimedean):
     def __init__(self, theta = 1, rotation = 0):
         super().__init__(rotation = rotation, model_name = "Gumbel", initial_param_guess = [1], 
@@ -666,7 +692,17 @@ class Gumbel(Archimedean):
 
 
     def _A(self, u1, u2, theta):
+        # helper A function
+        # Carol Alexander II.6.54
+
         return np.power(np.power(-np.log(u1), theta) + np.power(-np.log(u2), theta), 1/theta)
+    
+
+    def _B(self, w, theta):
+        # helper B function, see Joe 4.8.1
+        # note that Joe's "A" function is different from one used above from Carol Alexander
+
+        return np.power(np.power(w, theta) + np.power(1 - w, theta), 1/theta)
 
 
     def _cdf(self, u1, u2, theta):
@@ -704,7 +740,16 @@ class Gumbel(Archimedean):
     
 
     def _params_to_tau(self, theta):
-        return self._tau_rot_func(1 - 1 / theta)
+        # Joe 4.8.1
+        return self._corr_rot_func(1 - 1 / theta)
+    
+
+    def _params_to_rho(self, theta):
+        # numerical integration
+        # see Joe 4.8.1
+
+        integral, _ = integrate.quad(lambda w: np.power(1 + self._B(w, theta), -2), 0, 1)
+        return self._corr_rot_func(12 * integral - 3)
     
 
     def _tau_to_params(self, tau):
@@ -712,36 +757,30 @@ class Gumbel(Archimedean):
 
 
     def _unrotated_upper_tail_dependance(self, theta):
-        return 2 - (2 ** (1 / theta))
-    
-
-
-        
-    
+        return 2 - np.power(2, 1 / theta)
 
 
 
 class NormalMixture(BivariateCopula):
-    def __init__(self, p1 = 0.5, p2 = 0.5, Q1 = 0, Q2 = 0, adj = 1e-4):
+    def __init__(self, p1 = 0.5, Q1 = 0, Q2 = 0, adj = 1e-4):
 
         # case if lengths of p and Q disagree / with n_normals
         self.summary_title = "Bivariate Copula"
-        self.family_name = "Elliptical"
-        p1, p2 = self._normalize_p(p1, p2)
+        self.family_name = "Elliptical Mixture"
+        p1 = self._normalize_p(p1)
         self.base_model = Normal()
 
-        super().__init__("Mixture", [],
-                         [(adj, 1 - adj), (adj, 1 - adj), (-1 + adj, 1 - adj), (-1 + adj, 1 - adj)],
-                         ["p1", "p2", "Q1", "Q2"], [p1, p2, Q1, Q2])
+        super().__init__("Normal Mixture", [],
+                         [(adj, 1 - adj), (-1 + adj, 1 - adj), (-1 + adj, 1 - adj)],
+                         ["p1", "Q1", "Q2"], [p1, Q1, Q2])
         
 
     def _get_weighted_obj_func(self, u1, u2, weights, copula):
         return lambda params: -np.sum(weights * copula._logpdf(u1, u2, *params))
     
 
-    def _normalize_p(self, p1, p2):
-        p_sum = p1 + p2
-        return p1 / p_sum, p2 / p_sum 
+    def _normalize_p(self, p1):
+        return max(0, min(p1, 1))
     
 
     def _get_random_p(self, n, rng):
@@ -773,7 +812,7 @@ class NormalMixture(BivariateCopula):
         best_index = np.argmin(LL_list)
         p1, p2, Q1, Q2 = params_arr[best_index]
 
-        #return p1, p2, Q1, Q2, LL_list[best_index]
+        self._set_params(p1, Q1, Q2)
 
 
 
@@ -808,7 +847,8 @@ class NormalMixture(BivariateCopula):
 
     def _m_step(self, u1, u2, gamma1, gamma2, Q1, Q2, optimizer = "Powell"):
 
-        new_p1 = np.mean(gamma1); new_p2 = np.mean(gamma2)
+        new_p1 = np.mean(gamma1)
+        new_p2 = 1 - new_p1
 
         f1 = self._get_weighted_obj_func(u1, u2, gamma1, self.base_copula)
         f2 = self._get_weighted_obj_func(u1, u2, gamma2, self.base_copula)
@@ -824,46 +864,39 @@ class NormalMixture(BivariateCopula):
         return new_p1, new_p2, results1.x[0], results2.x[0], -1 * (results1.fun + results2.fun)
     
 
-    def _pdf(self, u1, u2, p1, p2, Q1, Q2):
-        return p1 * self.base_model._pdf(u1, u2, Q1) + p2 * self.base_model._pdf(u1, u2, Q2)
+    def _pdf(self, u1, u2, p1, Q1, Q2):
+        return p1 * self.base_model._pdf(u1, u2, Q1) + (1 - p1) * self.base_model._pdf(u1, u2, Q2)
     
 
     def _logpdf(self, u1, u2, *params):
         return np.log(self._pdf(u1, u2, *params))
 
 
-    def _cdf(self, u1, u2, p1, p2, Q1, Q2):
-        return p1 * self.base_model._cdf(u1, u2, Q1) + p2 * self.base_model._cdf(u1, u2, Q2)
+    def _cdf(self, u1, u2, p1, Q1, Q2):
+        return p1 * self.base_model._cdf(u1, u2, Q1) + (1 - p1) * self.base_model._cdf(u1, u2, Q2)
     
 
-    def _conditional_cdf(self, u1, u2, p1, p2, Q1, Q2):
+    def _conditional_cdf(self, u1, u2, p1, Q1, Q2):
         # cdf of u2 conditioned on u1
-
-        z1 = stats.norm.ppf(u1); z2 = stats.norm.ppf(u2)
-
-        num1, num2 = z2 - Q1 * z1, z2 - Q2 * z1
-        denom1, denom2 = self.base_model._scale_factor(Q1), self.base_model._scale_factor(Q2)
-
-        val = p1 * stats.norm.cdf(num1 / denom1) + p2 * stats.norm.cdf(num2 / denom2)
-        return val
+        return p1 * self.base_model._conditional_cdf(u1, u2, Q1) + (1 - p1) * self.base_model._conditional_cdf(u1, u2, Q2)
     
 
     def simulate(self, n = 1000, seed = None, adj = 1e-4):
 
-        p1, p2, Q1, Q2 = self.params
+        p1, Q1, Q2 = self.params
 
         rng = np.random.default_rng(seed = seed)
-        param_draw = rng.choice([Q1, Q2], p = [p1, p2], replace = True, size = n)
+        param_draw = rng.choice([Q1, Q2], p = [p1, 1 - p1], replace = True, size = n)
 
         u1 = rng.uniform(size = n)
         u2 = np.empty(shape = n)
         q = rng.uniform(size = n)
 
         for i, Q in enumerate(param_draw):
-            u2[i] = self.base_model._conditional_quantile(u1[i], q[i], Q, adj = adj)
+            u2[i] = self.base_model._conditional_ppf(u1[i], q[i], Q, adj = adj)
 
         return u1, u2
-    
+        
     
     def _lower_tail_dependance(self, *params):
         # mixture of two normals has to have 0 right?

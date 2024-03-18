@@ -192,6 +192,6 @@ class Base:
             data,
             headers=["coef", "std err", "h0", "t", "P>|t|", "95% Conf. Int."],
             stubs=model_obj.param_names,
-            title="{} Parameter Estimates".format(model_name) if model_name is not None else "Parameter Estimatess",
+            title="{} Parameter Estimates".format(model_name) if model_name is not None else "Parameter Estimates",
             txt_fmt=fmt_params_table
         )

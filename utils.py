@@ -4,7 +4,7 @@ from scipy.interpolate import interp1d
 from concurrent.futures import ProcessPoolExecutor
 
 
-def get_u_range(adj = 1e-3, range_num = 100):
+def get_u_range(adj = 1e-4, range_num = 100):
     return np.linspace(0 + adj, 1 - adj, range_num)
 
 
@@ -12,7 +12,7 @@ def get_x_range(low = -3, high = 3, range_num = 1000):
     return np.linspace(low, high, range_num)
 
 
-def get_u_grid(adj = 1e-3, range_num = 100):
+def get_u_grid(adj = 1e-4, range_num = 100):
     u = get_u_range(adj = adj, range_num = range_num)
     return np.meshgrid(u, u)
 
@@ -139,5 +139,19 @@ def flatten_concatenate(data1, data2):
     return np.stack([data1.flatten(), data2.flatten()], axis = 1)
 
 
-def empirical_kendall_tau(u1, u2):
-    return stats.kendalltau(u1, u2).statistic
+def sample_kendall_tau(x1, x2):
+    return stats.kendalltau(x1, x2).statistic
+
+
+def sample_spearman_rho(x1, x2):
+    return stats.spearmanr(x1, x2).statistic
+
+
+def monte_carlo_kendall_tau(copula, n = 10_000):
+    u1, u2 = copula.simulate(n = n)
+    return sample_kendall_tau(u1, u2)
+
+
+def monte_carlo_spearman_rho(copula, n = 10_000):
+    u1, u2 = copula.simulate(n = n)
+    return sample_spearman_rho(u1, u2)
