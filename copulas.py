@@ -770,7 +770,7 @@ class NormalMixture(BivariateCopula):
         p1 = self._normalize_p(p1)
         self.base_model = Normal()
 
-        super().__init__("Normal Mixture", [],
+        super().__init__("Normal Mixture", [np.nan, np.nan, np.nan],
                          [(adj, 1 - adj), (-1 + adj, 1 - adj), (-1 + adj, 1 - adj)],
                          ["p1", "Q1", "Q2"], [p1, Q1, Q2])
         

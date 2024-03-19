@@ -64,6 +64,11 @@ def rank_transform(x):
     return percentiles
 
 
+def normal_transform(x, adj = 1e-6):
+    u = clip_u_input(rank_transform(x), adj = adj)
+    return stats.norm.ppf(u)
+
+
 def rank_iteration(x1, x2, indices, rank_transform):
     # This function is executed in parallel for each bootstrap sample
     x1_boot = x1[indices]
