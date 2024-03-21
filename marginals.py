@@ -117,9 +117,60 @@ class StudentsT(Marginal):
         
 
 
+class NormalMixture(Marginal):
+    def __init__(self, p1, mu1, mu2, sigma1, sigma2, adj = 1e-4):
+
+        self._base_model = Normal()
+
+        super().__init__(None, model_name = "NormalMixture",
+                         initial_param_guess = [0.5, 0, 0, 1, 1], 
+                         param_bounds = [(0, 1), (-np.inf, np.inf), (-np.inf, np.inf), (adj, np.inf), (adj, np.inf)],
+                         param_names = ["p1", "mu1", "mu2", "sigma1", "sigma2"], params = [p1, mu1, mu2, sigma1, sigma2])
+        
+
+    def pdf(self, x):
+        # error handling
+        return self._pdf(x, *self.params)
+    
+
+    def _pdf(self, x, p1, mu1, mu2, sigma1, sigma2):
+        return p1 * self._base_model._pdf(x, mu1, sigma1) + (1 - p1) * self._base_model._pdf(x, mu2, sigma2)
+    
+    
+    def logpdf(self, x):
+        # error handling
+        return self._logpdf(x, *self.params)
+    
+
+    def _logpdf(self, x, p1, mu1, mu2, sigma1, sigma2):
+        return np.log(self._pdf(x, p1, mu1, mu2, sigma1, sigma2))
+    
+    
+    def cdf(self, x):
+        # error handling
+        return self._cdf(x, *self.params)
+    
+
+    def _cdf(self, x, p1, mu1, mu2, sigma1, sigma2):
+        return p1 * self._base_model.cdf(x, mu1, sigma1) + (1 - p1) * self._base_model(x, mu2, sigma2)
+
+
+    def ppf(self, x):
+        # error handling
+        pass
+
+
+    def _ppf(self, x, p1, mu1, mu2, sigma1, sigma2):
+        pass 
+
+
+
+
+
+
 class StandardSkewedT(Marginal):
-    def __init__(self, eta = 30, lam = 0, adj = 1e-2):
-        super().__init__(None, model_name = "SkewedStudentsT", 
+    def __init__(self, eta = 30, lam = 0, adj = 1e-4):
+        super().__init__(None, model_name = "StandardSkewedT", 
                          initial_param_guess = [30, 0], param_names = ["eta", "lam"],
                          param_bounds = [(2 + adj, np.inf), (-1 + adj, 1 - adj)],
                          params = [eta, lam])
@@ -134,8 +185,6 @@ class StandardSkewedT(Marginal):
     
 
     def _logpdf(self, x, eta, lam):
-
-        #z = (x - mu) / sigma
 
         # constants
         A, B, C = self._get_ABC(eta, lam)
@@ -168,7 +217,6 @@ class StandardSkewedT(Marginal):
 
     def _cdf(self, x, eta, lam):
         # source: Tino Contino (DirtyQuant)
-        #z = (x - mu) / sigma
 
         # constants
         A, B, _ = self._get_ABC(eta, lam)
@@ -187,10 +235,11 @@ class StandardSkewedT(Marginal):
         f = self._get_objective_func(valid_x)
         opt_results = self._fit(f, self.initial_param_guess, self.param_bounds, optimizer = optimizer)
         self._post_process_fit(valid_x, opt_results.x, self._get_objective_func(x), robust_cov = robust_cov)
+
+
+
     
 
-  
-# need to create sub class to distinguish GaussianKDE as this cannot be used in Mixture Models
         
 
 class GaussianKDE(Marginal):
@@ -218,7 +267,6 @@ class GaussianKDE(Marginal):
         self.LL = self._log_likelihood(x)
         self.aic = np.nan
         self.bic = np.nan
-
 
 
     def _set_cdf_ppf(self, min_x, max_x):
