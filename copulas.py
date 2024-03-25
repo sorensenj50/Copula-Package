@@ -132,7 +132,7 @@ class BivariateCopula(base.Base):
         now = datetime.now()
         top_left = [
             ("Model Name:", self.model_name), ("Model Family:", self.family_name), 
-            ("Method:", "MLE"),("Num. Params:", self.k), ("Num. Obs:", self.n),
+            ("Estimation Method:", self.estimation_method),("Num. Params:", self.k), ("Num. Obs:", self.n),
             ("Date:", now.strftime("%a, %b %d %Y")),("Time:", now.strftime("%H:%M:%S")), ("", ""),
         ]
 
@@ -252,7 +252,8 @@ class BivariateCopula(base.Base):
 
 class Independent(BivariateCopula):
     def __init__(self):
-        super().__init__(model_name = "Independent", initial_param_guess = [],
+        super().__init__(model_name = "Independent", family_name = np.nan, 
+                         initial_param_guess = [],
                          param_bounds = [], param_names = [], 
                          params = [])
         
@@ -282,10 +283,6 @@ class Independent(BivariateCopula):
 
 
 class Elliptical(BivariateCopula):
-    def __init__(self, *args, **kwargs):
-        self.family_name = "Elliptical"
-        super().__init__(*args, **kwargs)
-
 
     def _cov_det(self, Q):
         return 1 - Q ** 2
@@ -303,7 +300,7 @@ class Elliptical(BivariateCopula):
 
 class Normal(Elliptical):
     def __init__(self, Q = 0, adj = 1e-4):
-        super().__init__(model_name = "Normal", initial_param_guess = [0], 
+        super().__init__(model_name = "Normal", family_name = "Elliptical", initial_param_guess = [0], 
                          param_bounds = [(-1 + adj, 1 - adj)], param_names = ("Q",), 
                          params = (Q,))
         
@@ -366,7 +363,8 @@ class Normal(Elliptical):
     
 class StudentsT(Elliptical):
     def __init__(self, df = 30, Q = 0, adj = 1e-4, df_upper_bound = 100):
-        super().__init__(model_name = "StudentsT", initial_param_guess = [30, 0], 
+        super().__init__(model_name = "StudentsT", family_name = "Elliptical", 
+                         initial_param_guess = [30, 0], 
                          param_bounds = [(1, df_upper_bound), (-1 + adj, 1 - adj)], 
                          param_names = ("df", "Q"), params = (df, Q))
 
@@ -431,7 +429,6 @@ class StudentsT(Elliptical):
 
 class Archimedean(BivariateCopula):
     def __init__(self, rotation, model_name, *args, **kwargs):
-        self.family_name = "Archimedean"
 
         # model name has to be set before rotation
         self.model_name = model_name
@@ -521,7 +518,8 @@ class Archimedean(BivariateCopula):
     
 class Clayton(Archimedean):
     def __init__(self, theta = 1e-4, rotation = 0, adj = 1e-4):
-        super().__init__(rotation = rotation, model_name = "Clayton", initial_param_guess = [adj],
+        super().__init__(rotation = rotation, model_name = "Clayton", family_name = "Archimedean", 
+                         initial_param_guess = [adj],
                          param_bounds = [(adj, np.inf)], param_names = ("theta",), params = (theta,))
         
     
@@ -574,7 +572,8 @@ class Clayton(Archimedean):
 
 class Frank(Archimedean):
     def __init__(self, theta = 1e-4, rotation = 0, adj = 0):
-        super().__init__(rotation = rotation, model_name = "Frank", initial_param_guess = [adj],
+        super().__init__(rotation = rotation, model_name = "Frank", family_name = "Archimedean",
+                         initial_param_guess = [adj],
                          param_bounds = [(adj, np.inf)], param_names = ("theta",),
                          params = (theta,))
         
@@ -667,7 +666,8 @@ class Frank(Archimedean):
 
 class Gumbel(Archimedean):
     def __init__(self, theta = 1, rotation = 0):
-        super().__init__(rotation = rotation, model_name = "Gumbel", initial_param_guess = [1], 
+        super().__init__(rotation = rotation, model_name = "Gumbel", family_name = "Archimedean",
+                         initial_param_guess = [1], 
                          param_bounds = [(1, np.inf)], param_names = ("theta",),
                          params = (theta,))
 
@@ -746,11 +746,9 @@ class NormalMixture(BivariateCopula, Mixture):
     def __init__(self, p1 = 0.5, Q1 = 0, Q2 = 0, adj = 1e-4):
 
         # case if lengths of p and Q disagree / with n_normals
-        self.summary_title = "Bivariate Copula"
-        self.family_name = "Elliptical Mixture"
         p1 = self._normalize_p(p1)
 
-        BivariateCopula.__init__(self, "Normal Mixture", [np.nan, np.nan, np.nan],
+        BivariateCopula.__init__(self, "Normal Mixture", "Mixture", [np.nan, np.nan, np.nan],
                          [(adj, 1 - adj), (-1 + adj, 1 - adj), (-1 + adj, 1 - adj)],
                          ["p1", "Q1", "Q2"], [p1, Q1, Q2])
         

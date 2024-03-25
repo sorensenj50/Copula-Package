@@ -4,7 +4,7 @@ from mixture import Mixture
 
 import numpy as np
 from scipy import stats
-from scipy.special import gamma
+from scipy import special
 from datetime import datetime
 
 class Marginal(base.Base):
@@ -87,18 +87,56 @@ class Marginal(base.Base):
     def _get_top_summary_table(self):
         now = datetime.now()
         top_left = [
-            ("Model Name:", self.model_name), 
-            ("Method:", "MLE"),("Num. Params:", self.k), ("Num. Obs:", self.n),
+            ("Model Name:", self.model_name), ("Model Family:", self.family_name),
+            ("Estimation Method:", self.estimation_method),("Num. Params:", self.k), ("Num. Obs:", self.n),
             ("Date:", now.strftime("%a, %b %d %Y")),("Time:", now.strftime("%H:%M:%S")), ("", ""), ("", ""),
         ]
 
         top_right = [
             ("Log-Likelihood:", utils.format_func(self.LL, 10, 4)), ("AIC:", utils.format_func(self.aic, 10, 4)),
-            ("BIC:", utils.format_func(self.bic, 10, 4)), (" ", " "), (" ", " "), (" ", " "),
-            ("", ""), ("", ""),
+            ("BIC:", utils.format_func(self.bic, 10, 4)), ("Skewness:", utils.format_func(self.skewness, 10, 4)), 
+            ("Kurtosis", utils.format_func(self.kurtosis, 10, 4)), ("Entropy:", utils.format_func(self.entropy, 10, 4)),
+            ("95% CVaR:", utils.format_func(self.cvar, 10, 4)), ("", ""), ("", ""),
         ]
 
         return top_left, top_right
+    
+    @property
+    def skewness(self):
+        return self._params_to_skewness(*self.params)
+    
+
+    @property
+    def kurtosis(self):
+        return self._params_to_kurtosis(*self.params)
+    
+
+    @property
+    def entropy(self):
+        return self._params_to_entropy(*self.params)
+    
+
+    @property
+    def cvar(self):
+        return self._params_to_cvar(*self.params)
+    
+    
+    def _params_to_skewness(self, *params):
+        raise NotImplementedError
+    
+    
+    def _params_to_kurtosis(self, *params):
+        raise NotImplementedError
+    
+    
+    def _params_to_entropy(self, *params):
+        raise NotImplementedError
+    
+
+    def _params_to_cvar(self, *params):
+        raise NotImplementedError
+
+
     
 
 
@@ -107,27 +145,76 @@ class Normal(Marginal):
     def __init__(self, mu = 0, sigma = 1, adj = 1e-4):
 
         # the order of these params depends on SciPy
-        super().__init__(stats.norm, model_name = "Normal", initial_param_guess = [0, 1], 
+        super().__init__(stats.norm, model_name = "Normal", family_name = "Parametric", initial_param_guess = [0, 1], 
                         param_bounds = [(-np.inf, np.inf), (adj, np.inf)], param_names = ["mu", "sigma"],
                         params = [mu, sigma])
+        
 
+    def _params_to_skewness(self, mu, sigma):
+        return 0
+    
 
+    def _params_to_kurtosis(self, mu, sigma):
+        return 0
+    
+
+    def _params_to_entropy(self, mu, sigma):
+        return 1/2 * np.log(2 * np.pi * np.e * sigma ** 2)
+    
+
+    def _params_to_cvar(self, mu, sigma, alpha = 0.95):
+        # Matthew Norton et al 2019
+        return mu + sigma * (self._pdf(self._ppf(alpha))) / (1 - alpha)
+        
+    
 
 class StudentsT(Marginal):
     def __init__(self, df = 30, mu = 0, sigma = 1, adj = 1e-4):
        
         # the order of these params depends on SciPy
-        super().__init__(stats.t, model_name = "StudentT", initial_param_guess = [30, 0, 1], 
+        super().__init__(stats.t, model_name = "StudentsT", family_name = "Parametric", initial_param_guess = [30, 0, 1], 
                         param_bounds = [(1, np.inf), (-np.inf, np.inf), (adj, np.inf)], param_names = ["df", "mu", "sigma"],
                         params = [df, mu, sigma])
         
+
+    def _params_to_skewness(self, df, mu, sigma):
+        return 0 if df > 3 else np.nan
+        
+
+    def _params_to_kurtosis(self, df, mu, sigma):
+        if df > 4:
+            return 6 / (df - 4)
+        elif df > 2 and df <= 4:
+            return np.inf
+        else:
+            return np.nan
+        
+
+    def _params_to_entropy(self, df, mu, sigma):
+        # from stack overflow / wikipedia
+        # check this
+
+        df_term = (df + 1) / 2
+        digamma_term = special.digamma(df_term) - special.digamma(df / 2)
+        beta_term = np.log(np.sqrt(df) * special.beta(1/2, df / 2))
+
+        return beta_term + df_term * digamma_term
+    
+    
+    def _params_to_cvar(self, df, mu, sigma, alpha = 0.95):
+        
+        term1 = (df + stats.t.ppf(alpha, df) ** 2) / ((df - 1) * (1 - alpha))
+        term2 = stats.t.pdf(stats.t.ppf(alpha, df), df)
+
+        return mu + sigma * term1 * term2
+
 
 
 class NormalMixture(Marginal, Mixture):
     def __init__(self, p1 = 0.5, mu1 = 0, mu2 = 0, sigma1 = 1, sigma2 = 1, ppf_method = "solver", adj = 1e-4):
         p1 = self._normalize_p(p1)
 
-        Marginal.__init__(self, None, model_name = "NormalMixture",
+        Marginal.__init__(self, None, model_name = "NormalMixture", family_name = "Parametric Mixture",
                          initial_param_guess = [0.5, 0, 0, 1, 1], 
                          param_bounds = [(0, 1), (-np.inf, np.inf), (-np.inf, np.inf), (adj, np.inf), (adj, np.inf)],
                          param_names = ["p1", "mu1", "mu2", "sigma1", "sigma2"], params = [p1, mu1, mu2, sigma1, sigma2])
@@ -224,14 +311,14 @@ class StandardSkewedT(Marginal):
     # Hansen 1994
 
     def __init__(self, eta = 30, lam = 0, adj = 1e-4):
-        super().__init__(None, model_name = "StandardSkewedT", 
+        super().__init__(None, model_name = "StandardSkewedT", family_name = "Parametric",
                          initial_param_guess = [30, 0], param_names = ["eta", "lam"],
                          param_bounds = [(2 + adj, np.inf), (-1 + adj, 1 - adj)],
                          params = [eta, lam])
         
 
     def _get_ABC(self, eta, lam):
-        C = gamma((eta + 1) / 2) / (np.sqrt(np.pi * (eta - 2))  * gamma(eta / 2))
+        C = special.gamma((eta + 1) / 2) / (np.sqrt(np.pi * (eta - 2))  * special.gamma(eta / 2))
         A = 4 * lam * C * (eta - 2) / (eta - 1)
         B = np.sqrt(1 + 3 * (lam**2) - (A**2))
 
@@ -262,7 +349,7 @@ class StandardSkewedT(Marginal):
         eta_const = np.sqrt((eta - 2) / eta)
 
         # switching
-        core = np.where(u < (1 - lam) / 2, 
+        core = np.where(q < (1 - lam) / 2, 
                         (1 - lam) * stats.t.ppf(q / (1 - lam), eta), 
                         (1 + lam) * stats.t.ppf((q + lam) / (1 + lam), eta))
         
@@ -300,9 +387,10 @@ class GaussianKDE(Marginal):
 
         # explicitly defaulting to Scott if not provided--this SciPy's default too
         self.bw_method = bw_method if bw_method is not None else "scott"
+        self.kde_factor = np.nan
         self.bw_method_desc = self.get_bw_method_desc(self.bw_method)
 
-        super().__init__(None, model_name = "GaussianKDE", initial_param_guess = [], param_names = [],
+        super().__init__(None, model_name = "GaussianKDE", family_name = "Non-Parametric", initial_param_guess = [], param_names = [],
                          param_bounds = [], params = [])
     
     def fit(self, x):
@@ -316,6 +404,7 @@ class GaussianKDE(Marginal):
         self.is_fit = True
         self.n = len(x)
         self.LL = self._log_likelihood(x)
+        self.kde_factor = self.kde.factor
 
 
     def _set_cdf_ppf(self, min_x, max_x, Z = 4):
@@ -337,23 +426,22 @@ class GaussianKDE(Marginal):
         if (bw_method == "scott") or (bw_method == "silverman"):
             return bw_method
         elif callable(bw_method):
-            return "User Function"
+            return "user callable"
         else:
-            return "User Set"
+            return "user set"
 
 
     def _get_top_summary_table(self):
         now = datetime.now()
         top_left = [
-            ("Model Name:", self.model_name), 
-            ("Method:", self.bw_method_desc),("Num. Params:", 1), ("Num. Obs:", self.n),
-            ("Date:", now.strftime("%a, %b %d %Y")),("Time:", now.strftime("%H:%M:%S")), ("", ""),
+            ("Model Name:", self.model_name), ("Model Family:", self.family_name),
+            ("Method:", self.bw_method_desc),("Num. Params:", np.nan), ("Num. Obs:", self.n),
+            ("Date:", now.strftime("%a, %b %d %Y")),("Time:", now.strftime("%H:%M:%S")),
         ]
 
         top_right = [
-            ("Bandwidth", utils.format_func(self.kde.factor, 10, 4)), ("Log-Likelihood:", utils.format_func(self.LL, 10, 4)), 
-            ("AIC:", utils.format_func(self.aic, 10, 4)),
-            ("BIC:", utils.format_func(self.bic, 10, 4)), (" ", " "), (" ", " "), (" ", " "),
+            ("Log-Likelihood:", utils.format_func(self.LL, 10, 4)), ("Bandwidth:", utils.format_func(self.kde_factor, 10, 4)), 
+            (" ", " "), (" ", " "), ("", ""), ("", ""), ("", ""),
         ]
 
         return top_left, top_right
