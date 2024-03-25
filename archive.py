@@ -2,12 +2,12 @@ from scipy import stats
 from marginals import MarginalDist, UndefinedCDF, Marginal
 import utils
 import numpy as np
-from bivariate import BivariateCopula
+from copulas import BivariateCopula
 from scipy.integrate import cumulative_trapezoid
 from scipy.special import beta
 
 
-import bivariate
+import copulas
 import numpy as np
 from concurrent.futures import ProcessPoolExecutor
 

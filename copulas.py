@@ -1,5 +1,7 @@
 import utils
 import base
+from mixture import Mixture
+
 
 import numpy as np
 from scipy import stats, optimize, integrate, special
@@ -103,15 +105,12 @@ class BivariateCopula(base.Base):
             raise SyntaxError
     
         initial_guess = initial_param_guesses if initial_param_guesses is not None else self.initial_param_guess
-        objective_func = self._get_objective_func(u1_valid, u2_valid)
+        objective_func = self._get_obj_func(u1_valid, u2_valid)
 
         opt_results = self._fit(objective_func, initial_guess, self.param_bounds, optimizer = optimizer)
 
         self._post_process_fit(utils.flatten_concatenate(u1_valid, u2_valid), opt_results.x, 
                                objective_func, robust_cov = robust_cov)
-        
-        # abstract this to base?
-        self._calc_summary_info()
         
 
     # abstract this function to fit
@@ -122,7 +121,7 @@ class BivariateCopula(base.Base):
         opt_params = self._tau_to_params(tau)
 
         # still want to pass params through post processing to obtain standard errors
-        objective_func = self._get_objective_func(u1_valid, u2_valid)
+        objective_func = self._get_obj_func(u1_valid, u2_valid)
 
         self._post_process_fit(utils.flatten_concatenate(u1_valid, u2_valid), 
                                opt_params, objective_func=objective_func, robust_cov = robust_cov)
@@ -194,30 +193,13 @@ class BivariateCopula(base.Base):
     
     
     def _conditional_ppf(self, u1, q, *params, adj = 1e-6):
-        # re write to use reshape wrapper
-        # re write to throw error if f(a) or f(b) error
 
         # default implementation of the conditional quantile function uses numerical optimization method
         # on condtional cdf to find inverse
         # this code runs into problems if the data is < adj or > 1 - adj
 
+        return utils.solve_for_conditional_ppf(self._conditional_cdf, u1, q, *params, adj = adj)
 
-        def F(u1, q, *params, adj = 1e-6):
-            f = lambda u2: self._conditional_cdf(u1, u2, *params) - q
-            return optimize.brentq(f, a = adj, b = 1 - adj)
-
-        if utils.is_number(u1) and utils.is_number(q):
-            return F(u1, q, *params)
-
-
-        # flattening to handle any shape
-        # handling case of non np array input (list, etc)
-        out_shape = u1.shape
-        u1_flat = np.array(u1).flatten(); q_flat = np.array(q).flatten()
-        u2 = [F(u1, q, *params, adj = adj) for u1, q in zip(u1_flat, q_flat)]
-        
-        # reshaping
-        return np.array(u2).reshape(out_shape)
     
     @property
     def lower_tail(self):
@@ -296,7 +278,6 @@ class Independent(BivariateCopula):
 
     def _conditional_cdf(self, u1, u2):
         return u2
-
 
 
 
@@ -761,124 +742,50 @@ class Gumbel(Archimedean):
 
 
 
-class NormalMixture(BivariateCopula):
+class NormalMixture(BivariateCopula, Mixture):
     def __init__(self, p1 = 0.5, Q1 = 0, Q2 = 0, adj = 1e-4):
 
         # case if lengths of p and Q disagree / with n_normals
         self.summary_title = "Bivariate Copula"
         self.family_name = "Elliptical Mixture"
         p1 = self._normalize_p(p1)
-        self.base_model = Normal()
 
-        super().__init__("Normal Mixture", [np.nan, np.nan, np.nan],
+        BivariateCopula.__init__(self, "Normal Mixture", [np.nan, np.nan, np.nan],
                          [(adj, 1 - adj), (-1 + adj, 1 - adj), (-1 + adj, 1 - adj)],
                          ["p1", "Q1", "Q2"], [p1, Q1, Q2])
         
-
-    def _get_weighted_obj_func(self, u1, u2, weights, copula):
-        return lambda params: -np.sum(weights * copula._logpdf(u1, u2, *params))
+        Mixture.__init__(self, Normal())
     
 
-    def _normalize_p(self, p1):
-        return max(0, min(p1, 1))
-    
-
-    def _get_random_p(self, n, rng):
-        return rng.dirichlet(np.ones(n), size = (n, 2))
-    
-
-    def _get_random_q(self, n, rng):
-        return rng.uniform(-1, 1, size = (n, 2))    
+    def _get_random_params(self, n, rng, *data, adj = 1e-4):
+        # ensuring that correlation parameter is safely not 1 or -1
+        # data argument is unused
+        return rng.uniform(-1 + adj, 1 - adj, size = (n, 1))    
 
 
-    def fit(self, u1, u2, seed = None, n_init = 20, tol = 1e-4, max_iter = 100):
-
-        # random initilization, 
-       
-        rng = np.random.default_rng(seed = seed)
-        random_p = self._get_random_p(n_init, rng)
-        random_Q = self._get_random_q(n_init, rng)
-
-        params_arr = np.empty(shape = (n_init, 4)); LL_list = []
-
-        with ProcessPoolExecutor() as executor:
-            futures = [executor.submit(self._run_em_algo, u1, u2, random_p[i, 0], random_p[i, 1], random_Q[i, 0], random_Q[i, 1], 
-                                             tol = tol, max_iter = max_iter) for i in range(n_init)]
-
-        for i, future in enumerate(futures):
-            *params, LL = future.result()
-            params_arr[i] = list(params); LL_list.append(LL)
-
-        best_index = np.argmin(LL_list)
-        p1, p2, Q1, Q2 = params_arr[best_index]
-
+    def fit(self, u1, u2, seed = None, n_init = 20, tol = 1e-4, max_iter = 100, optimizer = "Powell"):
+        LL, p1, Q1, Q2 = self._run_em_algo_multi(u1, u2, seed = seed, n_init = n_init, tol = tol, 
+                                                 max_iter = max_iter, optimizer = optimizer)
+        
+        self.mini_post_process_fit(LL, u1.shape[0])
         self._set_params(p1, Q1, Q2)
 
 
-
-    def _run_em_algo(self, u1, u2, p1, p2, Q1, Q2, tol = 1e-4, max_iter = 100, m_method = "MLE"):
-
-        # takes input data and iniitla values for parameters
-        i = 0
-        LL = 0
-
-        while i < max_iter:
-            gamma1, gamma2 = self._e_step(u1, u2, p1, p2, Q1, Q2) 
-            new_p1, new_p2, new_Q1, new_Q2, new_LL = self._m_step(u1, u2, gamma1, gamma2, Q1, Q2)
-        
-            if np.abs(new_LL - LL) < tol:
-                return new_p1, new_p2, new_Q1, new_Q2, new_LL
-            
-            # setting new variables
-            p1, p2, Q1, Q2, LL = new_p1, new_p2, new_Q1, new_Q2, new_LL
-            i += 1
-
-        # hit max iterations
-        return p1, p2, Q1, Q2, LL
-
-
-    def _e_step(self, u1, u2, p1, p2, Q1, Q2):
-        gamma1 = p1 * self.base_copula._pdf(u1, u2, Q1)
-        gamma2 = p2 * self.base_copula._pdf(u1, u2, Q2)
-        gamma_sum = gamma1 + gamma2
-
-        return gamma1 / gamma_sum, gamma2 / gamma_sum
-    
-
-    def _m_step(self, u1, u2, gamma1, gamma2, Q1, Q2, optimizer = "Powell"):
-
-        new_p1 = np.mean(gamma1)
-        new_p2 = 1 - new_p1
-
-        f1 = self._get_weighted_obj_func(u1, u2, gamma1, self.base_copula)
-        f2 = self._get_weighted_obj_func(u1, u2, gamma2, self.base_copula)
-
-        # use previous Q has initial guess?
-        results1 = self.base_copula._fit(f1, [Q1], self.base_copula.param_bounds, 
-                                             optimizer = optimizer)
-        
-        results2 = self.base_copula._fit(f2, [Q2], self.base_copula.param_bounds, 
-                                             optimizer = optimizer)
-
-        # returning new_p1, new_p2, new_Q1, new_Q2, and the total log likelihood
-        return new_p1, new_p2, results1.x[0], results2.x[0], -1 * (results1.fun + results2.fun)
-    
-
     def _pdf(self, u1, u2, p1, Q1, Q2):
-        return p1 * self.base_model._pdf(u1, u2, Q1) + (1 - p1) * self.base_model._pdf(u1, u2, Q2)
+        return self._mixture_pdf(p1, (Q1,), (Q2,), u1, u2)
     
 
-    def _logpdf(self, u1, u2, *params):
-        return np.log(self._pdf(u1, u2, *params))
+    def _logpdf(self, u1, u2, p1, Q1, Q2):
+        return np.log(self._pdf(u1, u2, p1, Q1, Q2))
 
 
     def _cdf(self, u1, u2, p1, Q1, Q2):
-        return p1 * self.base_model._cdf(u1, u2, Q1) + (1 - p1) * self.base_model._cdf(u1, u2, Q2)
+        return self._mixture_cdf(p1, (Q1,), (Q2,), u1, u2)
     
 
     def _conditional_cdf(self, u1, u2, p1, Q1, Q2):
         # cdf of u2 conditioned on u1
-        return p1 * self.base_model._conditional_cdf(u1, u2, Q1) + (1 - p1) * self.base_model._conditional_cdf(u1, u2, Q2)
+        return p1 * self._base_model._conditional_cdf(u1, u2, Q1) + (1 - p1) * self._base_model._conditional_cdf(u1, u2, Q2)
     
 
     def simulate(self, n = 1000, seed = None, adj = 1e-4):
@@ -893,19 +800,20 @@ class NormalMixture(BivariateCopula):
         q = rng.uniform(size = n)
 
         for i, Q in enumerate(param_draw):
-            u2[i] = self.base_model._conditional_ppf(u1[i], q[i], Q, adj = adj)
+            u2[i] = self._base_model._conditional_ppf(u1[i], q[i], Q, adj = adj)
 
         return u1, u2
-        
     
+
     def _lower_tail_dependance(self, *params):
-        # mixture of two normals has to have 0 right?
         return 0
     
 
     def _upper_taiL_dependance(self, *params):
-        # mixture of two normals has to have zero right?
         return 0
+        
+    
+    
 
     
     

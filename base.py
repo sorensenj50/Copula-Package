@@ -52,8 +52,12 @@ class Base:
         return minimize(f, initial_param_guess, bounds = param_bounds, method = optimizer)
     
 
-    def _get_objective_func(self, *data):
+    def _get_obj_func(self, *data):
         return lambda params: -1 * self._log_likelihood(*data, *params)
+    
+
+    def _get_weighted_obj_func(self, weights, *data):
+        return lambda params: -np.sum(weights * self._logpdf(*data, *params))
     
 
     def _get_gradient_func(self, opt_params_arr):
@@ -89,11 +93,11 @@ class Base:
         return self._se_from_matrix(inv_hess_matrix @ S @ inv_hess_matrix)
 
 
-    def _get_aic(self, LL, k):
+    def _calc_aic(self, LL, k):
         return 2 * k - LL
     
 
-    def _get_bic(self, LL, n):
+    def _calc_bic(self, LL, n):
         return 2 * np.log(n) - 2 * LL
 
 
@@ -103,12 +107,10 @@ class Base:
         self.LL = -1 * objective_func(opt_params_arr)
         self.robust_cov = robust_cov
 
-        # saving most recent 
-        self.k = len(opt_params_arr)
         self.n = len(data_arr)
 
-        self.aic = 2 * self.k - self.LL
-        self.bic = 2 * np.log(self.n) - 2 * self.LL
+        self.aic = self._calc_aic(self.LL, self.k)
+        self.bic = self._calc_bic(self.LL, self.n)
 
         if robust_cov:
             self.se = self._get_robust_se(data_arr, opt_params_arr, objective_func)
@@ -130,6 +132,7 @@ class Base:
 
         # setting params
         self._set_params(tuple(opt_params_arr))
+
 
     def summary(self):
         return self._summary([self], [None])

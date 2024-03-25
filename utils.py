@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import stats
 from scipy.interpolate import interp1d
+from scipy.optimize import brentq
 from concurrent.futures import ProcessPoolExecutor
 
 
@@ -160,3 +161,44 @@ def monte_carlo_kendall_tau(copula, n = 10_000):
 def monte_carlo_spearman_rho(copula, n = 10_000):
     u1, u2 = copula.simulate(n = n)
     return sample_spearman_rho(u1, u2)
+
+
+def solve_for_ppf(cdf_func, q, a, b, *params, adj = 1e-6):
+    # input validation for q
+
+    def F(q):
+        f = lambda x: cdf_func(x, *params) - q
+        return brentq(f, a = a, b = b)
+    
+    if is_number(q):
+        return F(q)
+    
+    # else, q is array
+    x = [F(q_i) for q_i in q.flatten()]
+    return np.array(x).reshape(q.shape)
+
+
+def solve_for_conditional_ppf(conditional_cdf_func, u1, q, *params, adj = 1e-6):
+
+    # input validation for u1 and q
+    # catch f(a) or f(b) error?
+
+    def F(u1, q, *params, adj = 1e-6):
+        f = lambda u2: conditional_cdf_func(u1, u2, *params) - q
+        return brentq(f, a = adj, b = 1 - adj)
+    
+    if is_number(u1) and is_number(q):
+        return F(u1, q, *params)
+    
+
+    # else, u1 and q are arrays
+    # assuming same shape
+    
+    u2 = [F(u1_i, q_i, *params, adj = adj) for u1_i, q_i in zip(u1.flatten(), q.flatten())]
+    return np.array(u2).reshape(u1.shape)
+
+
+
+
+
+
