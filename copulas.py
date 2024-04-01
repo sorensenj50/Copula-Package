@@ -742,6 +742,7 @@ class Gumbel(Archimedean):
 
 
 
+# re write to use Mixture pdf / cdf / ppf
 class NormalMixture(BivariateCopula, Mixture):
     def __init__(self, p1 = 0.5, Q1 = 0, Q2 = 0, adj = 1e-4):
 

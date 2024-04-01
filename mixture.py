@@ -67,7 +67,6 @@ class Mixture(Base):
     def _run_em_algo(self, p1, params1, params2, data,
                      tol = 1e-4, max_iter = 100, optimizer = "Powell"):
         
-
         i = 0; LL = 0
         while i < max_iter:
             gamma1, gamma2 = self._e_step(p1, params1, params2, *data)

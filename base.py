@@ -114,6 +114,7 @@ class Base:
 
         self.aic = self._calc_aic(self.LL, self.k)
         self.bic = self._calc_bic(self.LL, self.n)
+        self.robust_cov = robust_cov
 
         if robust_cov:
             self.se = self._get_robust_se(data_arr, opt_params_arr, objective_func)
@@ -167,19 +168,27 @@ class Base:
         table.extend_right(SimpleTable(vals, stubs=stubs))
         smry.tables.append(table)
 
-        if len(self.params) <= 0:
-            return smry
-
-        for model_obj, model_name in zip(model_objects, model_names):
-            smry.tables.append(self.make_summary_table(model_obj, model_name, fmt_params))
+        if len(self.params) > 0:
+            for model_obj, model_name in zip(model_objects, model_names):
+                smry.tables.append(self._make_summary_table(model_obj, model_name, fmt_params))
         
-        #extra_text = ["Covariance Method: robust",]
-        #if self.robust_cov is not None:
-        #     smry.add_extra_txt(["Covariance Method: {}".format("robust" if self.robust_cov else "classical")]) 
+        extra_text = self._get_extra_text()
+
+        if len(extra_text) > 0:
+            smry.add_extra_txt(extra_text) 
         
         return smry
     
-    def make_summary_table(self, model_obj, model_name, fmt_params):
+    def _get_extra_text(self):
+        # default function for extra text, can be overriden
+        
+        if not self.is_fit:
+            return []
+
+        return ["Covariance Method: {}".format("robust" if self.robust_cov else "classical")]
+
+    
+    def _make_summary_table(self, model_obj, model_name, fmt_params):
         data = []
         for _, (param, guess, std_err, t_val, p_val, ci) in enumerate(zip(model_obj.params, model_obj.initial_param_guess, model_obj.se, model_obj.t, model_obj.p, model_obj.conf_int)):
             data.append([

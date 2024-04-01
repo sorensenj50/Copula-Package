@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import stats
 from scipy.interpolate import interp1d
+from scipy import integrate
 from scipy.optimize import brentq
 from concurrent.futures import ProcessPoolExecutor
 
@@ -196,6 +197,19 @@ def solve_for_conditional_ppf(conditional_cdf_func, u1, q, *params, adj = 1e-6):
     
     u2 = [F(u1_i, q_i, *params, adj = adj) for u1_i, q_i in zip(u1.flatten(), q.flatten())]
     return np.array(u2).reshape(u1.shape)
+
+
+def monte_carlo_cvar(marginal_dist, n = 1000, seed = None, alpha = 0.95):
+    x = marginal_dist.simulate(n = n, seed = seed)
+    thresh = np.quantile(x, 1 - alpha)
+    return np.mean(x[x <= thresh])
+
+
+def numerical_differential_entropy(marginal_dist, a = -np.inf, b = np.inf):
+    integrand = lambda x: marginal_dist._pdf(x, *marginal_dist.params) * marginal_dist._logpdf(x, *marginal_dist.params)
+    print(integrate.quad(integrand, a, b))
+    #return entropy
+
 
 
 
