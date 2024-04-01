@@ -9,6 +9,7 @@ class Mixture(Base):
 
     def __init__(self, base_model):
         self._base_model = base_model
+        self.estimation_method_str = "EM Algo"
 
 
     def _normalize_p(self, p):
@@ -120,7 +121,12 @@ class Mixture(Base):
         return p1 * self._base_model._cdf(*data, *params1) + (1 - p1) * self._base_model._cdf(*data, *params2)
     
     
-    
+    def _get_extra_text(self):
+        brent_string = "Inverse CDF (PPF) solved using Brent's Method"
+        if self.is_fit:
+            return ["Standard Errors not available", brent_string]
+        else:
+            return [brent_string]
     
 
 

@@ -205,13 +205,17 @@ def monte_carlo_cvar(marginal_dist, n = 1000, seed = None, alpha = 0.95):
     return np.mean(x[x <= thresh])
 
 
-def numerical_differential_entropy(marginal_dist, a = -np.inf, b = np.inf):
-    integrand = lambda x: marginal_dist._pdf(x, *marginal_dist.params) * marginal_dist._logpdf(x, *marginal_dist.params)
-    print(integrate.quad(integrand, a, b))
-    #return entropy
 
+def monte_carlo_stats(marginal):
+    X = marginal.simulate(n = marginal.monte_carlo_n, seed = marginal.monte_carlo_seed)
 
+    skewness = stats.skew(X); kurtosis = stats.kurtosis(X)
 
+    quantile = np.quantile(X, 0.05)
+    cvar_filter = X <= quantile
+    cvar = np.mean(X[cvar_filter])
+
+    return skewness, kurtosis, cvar
 
 
 

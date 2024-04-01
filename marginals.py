@@ -89,7 +89,7 @@ class Marginal(base.Base):
         now = datetime.now()
         top_left = [
             ("Model Name:", self.model_name), ("Model Family:", self.family_name),
-            ("Esimation Method:", self.estimation_method),("Num. Params:", self.k), ("Num. Obs:", self.n),
+            ("Esimation Method:", self._get_estimation_method()),("Num. Params:", self.k), ("Num. Obs:", self.n),
             ("Date:", now.strftime("%a, %b %d %Y")),("Time:", now.strftime("%H:%M:%S")), ("", ""), ("", ""),
         ]
 
@@ -136,12 +136,7 @@ class Marginal(base.Base):
     
 
     def _params_to_cvar(self, *params, alpha = 0.95):
-        # default is Monte Carlo simulation, which can be fairly efficient
-        # child classes can override this with analytic solutions
-
-        seed = 0 # fixed seed for reproducibility
-        n = 5000 # speed accuracy tradeoff
-        return utils.monte_carlo_cvar(self, n = n, seed = seed, alpha = alpha)
+        raise NotImplementedError
     
 
 
@@ -251,11 +246,11 @@ class StudentsT(Marginal):
 
 
 
-class NormalMixture(Marginal, Mixture):
+class NormalMix(Mixture, Marginal):
     def __init__(self, p1 = 0.5, mu1 = 0, mu2 = 0, sigma1 = 1, sigma2 = 1, adj = 1e-4):
         p1 = self._normalize_p(p1)
 
-        Marginal.__init__(self, None, model_name = "NormalMixture", family_name = "Parametric Mixture",
+        Marginal.__init__(self, None, model_name = "NormalMix", family_name = "Finite Mixture",
                          initial_param_guess = [0.5, 0, 0, 1, 1], 
                          param_bounds = [(0, 1), (-np.inf, np.inf), (-np.inf, np.inf), (adj, np.inf), (adj, np.inf)],
                          param_names = ["p1", "mu1", "mu2", "sigma1", "sigma2"], params = [p1, mu1, mu2, sigma1, sigma2])
@@ -386,16 +381,17 @@ class NormalMixture(Marginal, Mixture):
         part_2 = (1 - p1) * stats.norm.cdf(c2) / (1 - alpha) * (mu2 - sigma2 * stats.norm.pdf(c2) / stats.norm.cdf(c2))
         
         return part_1 + part_2
+        
 
 
 
 
-class NormalVarianceMixture(Marginal, Mixture):
+class NormalVarianceMix(Mixture, Marginal):
     def __init__(self, p1 = 0.5, sigma1 = 1, sigma2 = 1, adj = 1e-4):
 
         p1 = self._normalize_p(p1)
 
-        Marginal.__init__(self, None, model_name = "NormalVarianceMixture", family_name = "Parametric Mixture",
+        Marginal.__init__(self, None, model_name = "NormalVarianceMix", family_name = "Finite Mixture",
                           initial_param_guess = [0.5, 1, 1], param_bounds = [(0, 1), (adj, np.inf), (adj, np.inf)],
                           param_names = ["p1", "sigma1", "sigma2"], params = [p1, sigma1, sigma2])
         
@@ -409,11 +405,11 @@ class NormalVarianceMixture(Marginal, Mixture):
         num_obs = data.shape[0]
         bootstrap_size = np.ceil(np.sqrt(num_obs))
         random_indices = rng.integers(num_obs, size = (n, int(bootstrap_size)))
-        random_params = np.zeros(shape = n)
+        random_params = np.zeros(shape = (n, 1))
 
         for i in range(n):
             bootstrap_selection = data[random_indices[i]]
-            random_params[i] = np.std(bootstrap_selection)
+            random_params[i] = np.array([np.std(bootstrap_selection)])
 
         return random_params
     
@@ -496,18 +492,23 @@ class NormalVarianceMixture(Marginal, Mixture):
         term_2 = (1 - p1) * sigma2 * stats.norm.pdf(var / sigma2)
 
         return -(term_1 + term_2) / (1 - alpha)
-        
-
-
+    
+    
 
 class StandardSkewedT(Marginal):
     # Hansen 1994
 
-    def __init__(self, eta = 30, lam = 0, adj = 1e-4):
+    def __init__(self, eta = 30, lam = 0, adj = 1e-4, monte_carlo_n = 10_000, monte_carlo_seed = None):
         super().__init__(None, model_name = "StandardSkewedT", family_name = "Parametric",
                          initial_param_guess = [30, 0], param_names = ["eta", "lam"],
                          param_bounds = [(2 + adj, np.inf), (-1 + adj, 1 - adj)],
                          params = [eta, lam])
+        
+        self._skew = np.nan
+        self._kurtosis = np.nan
+        self._cvar = np.nan
+        self.monte_carlo_n = monte_carlo_n
+        self.monte_carlo_seed = monte_carlo_seed
         
 
     def _get_ABC(self, eta, lam):
@@ -534,9 +535,7 @@ class StandardSkewedT(Marginal):
 
 
     def _ppf(self, q, eta, lam):
-
         # source: Tino Contino (DirtyQuant)
-
         # constants
         A, B, _ = self._get_ABC(eta, lam)
         eta_const = np.sqrt((eta - 2) / eta)
@@ -566,17 +565,41 @@ class StandardSkewedT(Marginal):
         # error handling
         valid_x = self._handle_input(x)
 
-        f = self._get_objective_func(valid_x)
+        f = self._get_obj_func(valid_x)
         opt_results = self._fit(f, self.initial_param_guess, self.param_bounds, optimizer = optimizer)
-        self._post_process_fit(valid_x, opt_results.x, self._get_objective_func(x), robust_cov = robust_cov)
+        self._post_process_fit(valid_x, opt_results.x, self._get_obj_func(x), robust_cov = robust_cov)
+
+        # monte carlo
+        self._skew, self._kurtosis, self._cvar = utils.monte_carlo_stats(self)
 
 
-    def _params_to_skewness(self, eta, lam):
-        return np.nan
+    @property
+    def skewness(self):
+        # bypassing / not implementing _params_to_skew
+        return self._skew
     
 
-    def _params_to_kurtosis(self, eta, lam):
-        return np.nan
+    @property
+    def kurtosis(self):
+        # bypasssing / not implementing _params_to_kurtosis
+        return self._kurtosis
+    
+
+    @property
+    def cvar(self):
+        # bypassing / not implementing params_to_cvar
+        return self._cvar
+
+
+    def summary(self):
+        if not self.is_fit:
+            # if not already estimated, on the fly monte carlo for params
+            self._skew, self._kurtosis, self._cvar = utils.monte_carlo_stats(self)
+
+        return super().summary()
+    
+    def _get_extra_text(self):
+        return super()._get_extra_text() + ["Skewness, Kurtosis, and CVaR Estimated via Monte Carlo"]
 
 
 
@@ -593,7 +616,7 @@ class GaussianKDE(Marginal):
         # explicitly defaulting to Scott if not provided--this SciPy's default too
         self.bw_method = bw_method if bw_method is not None else "scott"
         self.kde_factor = np.nan
-        self.estimation_method = self.get_bw_method_desc(self.bw_method)
+        self.estimation_method_str = self.get_bw_method_desc(self.bw_method)
         self.Z_factor = Z_factor
         self.interpolation_n = interpolation_n
         self.monte_carlo_n = monte_carlo_n
@@ -619,7 +642,8 @@ class GaussianKDE(Marginal):
         self.LL = self._log_likelihood(x)
         self.kde_factor = self.kde.factor
 
-        self._skew, self._kurtosis, self._cvar = self._monte_carlo_stats()
+        # monte carlo estimates for skew, kurtosis, cvar
+        self._skew, self._kurtosis, self._cvar = utils._monte_carlo_stats(self)
 
 
     def _set_cdf_ppf(self, min_x, max_x):
@@ -672,18 +696,6 @@ class GaussianKDE(Marginal):
 
     def _ppf(self, q):
         return self.interp1d_ppf_func(q)
-    
-
-    def _monte_carlo_stats(self):
-        X = self.simulate(n = self.monte_carlo_n, seed = self.monte_carlo_seed)
-
-        skewness = stats.skew(X); kurtosis = stats.kurtosis(X)
-
-        quantile = np.quantile(X, 0.05)
-        cvar_filter = X <= quantile
-        cvar = np.mean(X[cvar_filter])
-
-        return skewness, kurtosis, cvar
     
 
     def _params_to_skewness(self, *params):

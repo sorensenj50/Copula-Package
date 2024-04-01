@@ -12,6 +12,7 @@ from concurrent.futures import ProcessPoolExecutor
 class BivariateCopula(base.Base):
     def __init__(self, *args, **kwargs):
         self.summary_title = "Bivariate Copula"
+        self.estimation_method_str = "CMLE"
         super().__init__(*args, **kwargs)
     
 
@@ -132,7 +133,7 @@ class BivariateCopula(base.Base):
         now = datetime.now()
         top_left = [
             ("Model Name:", self.model_name), ("Model Family:", self.family_name), 
-            ("Estimation Method:", self.estimation_method),("Num. Params:", self.k), ("Num. Obs:", self.n),
+            ("Estimation Method:", self.estimation_method_str),("Num. Params:", self.k), ("Num. Obs:", self.n),
             ("Date:", now.strftime("%a, %b %d %Y")),("Time:", now.strftime("%H:%M:%S")), ("", ""),
         ]
 
@@ -739,17 +740,21 @@ class Gumbel(Archimedean):
 
     def _unrotated_upper_tail_dependance(self, theta):
         return 2 - np.power(2, 1 / theta)
+    
+
+    def _get_extra_text(self):
+        return super()._get_extra_text() + ["Conditional PPF Solved using Brent's Method"]
 
 
 
 # re write to use Mixture pdf / cdf / ppf
-class NormalMixture(BivariateCopula, Mixture):
+class NormalMix(Mixture, BivariateCopula):
     def __init__(self, p1 = 0.5, Q1 = 0, Q2 = 0, adj = 1e-4):
 
         # case if lengths of p and Q disagree / with n_normals
         p1 = self._normalize_p(p1)
 
-        BivariateCopula.__init__(self, "Normal Mixture", "Mixture", [np.nan, np.nan, np.nan],
+        BivariateCopula.__init__(self, "NormalMix", "Finite Mixture", [np.nan, np.nan, np.nan],
                          [(adj, 1 - adj), (-1 + adj, 1 - adj), (-1 + adj, 1 - adj)],
                          ["p1", "Q1", "Q2"], [p1, Q1, Q2])
         
@@ -766,8 +771,8 @@ class NormalMixture(BivariateCopula, Mixture):
         LL, p1, Q1, Q2 = self._run_em_algo_multi(u1, u2, seed = seed, n_init = n_init, tol = tol, 
                                                  max_iter = max_iter, optimizer = optimizer)
         
-        self.mini_post_process_fit(LL, u1.shape[0])
-        self._set_params(p1, Q1, Q2)
+        self._mini_post_process_fit(LL, u1.shape[0])
+        self._set_params((p1, Q1, Q2))
 
 
     def _pdf(self, u1, u2, p1, Q1, Q2):
@@ -794,9 +799,8 @@ class NormalMixture(BivariateCopula, Mixture):
         rng = np.random.default_rng(seed = seed)
         param_draw = rng.choice([Q1, Q2], p = [p1, 1 - p1], replace = True, size = n)
 
-        u1 = rng.uniform(size = n)
+        u1 = rng.uniform(size = n); q = rng.uniform(size = n)
         u2 = np.empty(shape = n)
-        q = rng.uniform(size = n)
 
         for i, Q in enumerate(param_draw):
             u2[i] = self._base_model._conditional_ppf(u1[i], q[i], Q, adj = adj)
@@ -810,6 +814,17 @@ class NormalMixture(BivariateCopula, Mixture):
 
     def _upper_taiL_dependance(self, *params):
         return 0
+    
+
+    def _get_extra_text(self):
+
+        text_list = ["Tau and Rho calculated using numerical integration of CDF", 
+                     "Conditional PPF solved using Brent's Method"]
+        
+        if self.is_fit:
+            return [super()._get_extra_text()[0]] + text_list
+        
+        return text_list
         
     
     

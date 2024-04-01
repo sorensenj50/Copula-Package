@@ -14,7 +14,7 @@ class Base:
 
         self.model_name = model_name
         self.family_name = family_name
-        self.estimation_method = np.nan
+        self.estimation_method_str = "MLE" # default, can be changed
 
         self.initial_param_guess = initial_param_guess
         self.param_bounds = param_bounds
@@ -108,7 +108,6 @@ class Base:
         self.is_fit = True
         self.LL = -1 * objective_func(opt_params_arr)
         self.robust_cov = robust_cov
-        self.estimation_method = "MLE" # change when using both MLE or MM
 
         self.n = len(data_arr)
 
@@ -136,6 +135,12 @@ class Base:
 
         # setting params
         self._set_params(tuple(opt_params_arr))
+
+    def _get_estimation_method(self):
+        if self.is_fit:
+            return self.estimation_method_str
+        
+        return np.nan
 
 
     def summary(self):
