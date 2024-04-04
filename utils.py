@@ -32,7 +32,7 @@ def is_arraylike(x):
     return isinstance(x, np.ndarray)
 
 
-def format_func(value, width, precision):
+def format_func(value, width, precision = 3):
     return f"{value:{width}.{precision}f}"
 
 

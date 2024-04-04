@@ -197,12 +197,12 @@ class Base:
         data = []
         for _, (param, guess, std_err, t_val, p_val, ci) in enumerate(zip(model_obj.params, model_obj.initial_param_guess, model_obj.se, model_obj.t, model_obj.p, model_obj.conf_int)):
             data.append([
-                utils.format_func(param, 2, 4),
-                utils.format_func(std_err, 10, 4),
-                utils.format_func(guess, 2, 2),
-                utils.format_func(t_val, 10, 4),
-                utils.format_func(p_val, 10, 4),
-                f"[{ci[0]:.4f}, {ci[1]:.4f}]"
+                utils.format_func(param, 2),
+                utils.format_func(std_err, 10),
+                utils.format_func(guess, 2),
+                utils.format_func(t_val, 10),
+                utils.format_func(p_val, 10),
+                f"[{ci[0]:.3f}, {ci[1]:.3f}]"
             ])
             
         fmt_params_table = fmt_params.copy()
