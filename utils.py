@@ -122,24 +122,23 @@ def build_cdf_interpolations(x_range, cdf_values):
     return cdf, ppf
 
 
-def find_x_bounds(loc, scale, pdf_func, *pdf_params, tol = 5e-4, expansion_factor = 0.5):
+def find_x_bounds(f, loc, scale, *f_params, initial_Z = 4, tol = 1e-6, max_iter = 10):
+
+    lower_bound = loc - initial_Z * scale
+    upper_bound = loc + initial_Z * scale
     
-    step = expansion_factor * scale
-    left_bound = -3 * scale + loc; right_bound = 3 * scale + loc
-    
-    while True:
-        
-        pdf_right = pdf_func(right_bound, *pdf_params)
-        pdf_left = pdf_func(left_bound, *pdf_params)
-        
-        if pdf_left > tol:
-            left_bound -= step
-        
-        if pdf_right > tol:
-            right_bound += step
-            
-        if pdf_left < tol and pdf_right < tol:
-            return left_bound, right_bound
+    i = 0 # prevent infinite loops in case of numerical issues
+    while i < max_iter:
+        if f(lower_bound, *f_params) > tol:
+            lower_bound -= scale
+        elif f(upper_bound, *f_params) < 1 - tol:
+            upper_bound += scale
+        else:
+            break # both are more extreme than tolerance
+
+        i += 1
+
+    return lower_bound, upper_bound
         
 
 def flatten_concatenate(data1, data2):

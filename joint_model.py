@@ -5,7 +5,7 @@ from base import Base
 import utils
 
 
-class BivariateModel(Base):
+class JointModel(Base):
     def __init__(self, copula, marginal1, marginal2):
         self.copula = copula
         self.marginal1 = marginal1

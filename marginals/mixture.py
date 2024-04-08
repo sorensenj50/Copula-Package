@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.random import Generator
 from scipy import stats
 
 from .parametric import CenteredNormal, Normal
@@ -6,10 +7,14 @@ from .marginals import Marginal
 from mixture import Mixture
 import utils
 
+from typing import Union, Tuple
+from type_definitions import Vectorizable, Vectorizable1d
+
 
 
 class NormalMix(Mixture, Marginal):
-    def __init__(self, p1 = 0.5, loc1 = 0, loc2 = 0, scale1 = 1, scale2 = 1, adj = 1e-4):
+    def __init__(self, p1: float = 0.5, loc1: float = 0, loc2: float = 0, scale1: float = 1, scale2: float = 1, adj: float = 1e-4):
+
         p1 = self._normalize_p(p1)
 
         Marginal.__init__(self, None, model_name = "NormalMix", family_name = "Finite Mixture",
@@ -20,7 +25,7 @@ class NormalMix(Mixture, Marginal):
         Mixture.__init__(self, Normal())
 
 
-    def _get_random_params(self, n, rng, data):
+    def _get_random_params(self, n: int, rng: Generator, data: Vectorizable1d) -> np.ndarray:
         # simple bootstrap to get random mean and standard deviation
         # for initialization of EM algorithm
 
@@ -38,7 +43,9 @@ class NormalMix(Mixture, Marginal):
         return random_params
     
 
-    def fit(self, x, seed = None, n_init = 20, tol = 1e-4, max_iter = 100, optimizer = "Powell"):
+    def fit(self, x: Vectorizable1d, seed: Union[int, None] = None, n_init: int = 20, 
+                  tol: float = 1e-4, max_iter: int = 100, optimizer: str = "Powell") -> None:
+        
         # input validation
 
         LL, p1, mu1, sigma1, mu2, sigma2 = self._run_em_algo_multi(x, seed = seed, n_init = n_init, tol = tol,
@@ -48,25 +55,25 @@ class NormalMix(Mixture, Marginal):
         self._mini_post_process_fit(LL, x.shape[0])
 
 
-    def _pdf(self, x, p1, loc1, loc2, scale1, scale2):
+    def _pdf(self, x: Vectorizable, p1: float, loc1: float, loc2: float, scale1: float, scale2: float) -> Vectorizable:
         return self._mixture_pdf(p1, (loc1, scale1), (loc2, scale2), x)
     
 
-    def _logpdf(self, x, p1, loc1, loc2, scale1, scale2):
+    def _logpdf(self, x: Vectorizable, p1: float, loc1: float, loc2: float, scale1: float, scale2: float) -> Vectorizable:
         return np.log(self._pdf(x, p1, loc1, loc2, scale1, scale2))
     
 
-    def _cdf(self, x, p1, loc1, loc2, scale1, scale2):
+    def _cdf(self, x: Vectorizable, p1: float, loc1: float, loc2: float, scale1: float, scale2: float) -> Vectorizable:
         return self._mixture_cdf(p1, (loc1, scale1), (loc2, scale2), x)
     
     
-    def _ppf(self, q, *params):
+    def _ppf(self, q: Vectorizable, *params: float) -> Vectorizable:
         # Brent Q solver
         a, b = self._get_lower_upper_bound(*params)
         return utils.solve_for_ppf(self._cdf, q, a, b, *params)
     
 
-    def _get_lower_upper_bound(self, p1, loc1, loc2, scale1, scale2, Z_factor = 5):
+    def _get_lower_upper_bound(self, p1: float, loc1: float, loc2: float, scale1: float, scale2: float, Z_factor: float = 5) -> Tuple[float, float]:
         # finds boundaries needed for Brent Q solver of ppf
         # p1 is unused
 
@@ -75,7 +82,7 @@ class NormalMix(Mixture, Marginal):
         return lower_bound, upper_bound
     
 
-    def simulate(self, n = 1000, seed = None):
+    def simulate(self, n: int = 1000, seed: Union[int, None] = None) -> np.ndarray:
         # this is faster and simpler than default of mixture PPF
 
         p1, loc1, loc2, scale1, scale2 = self.params
@@ -89,12 +96,12 @@ class NormalMix(Mixture, Marginal):
         return np.array([rng.normal(loc = loc_params[i], scale = scale_params[i]) for i in range(n)])
     
 
-    def _params_to_mean(self, p1, loc1, loc2, scale1, scale2):
+    def _params_to_mean(self, p1: float, loc1: float, loc2: float, scale1: float, scale2: float) -> float:
         # linearity of expectation
         return p1 * loc1 + (1 - p1) * loc2 
 
     
-    def _params_to_variance(self, p1, loc1, loc2, scale1, scale2):
+    def _params_to_variance(self, p1: float, loc1: float, loc2: float, scale1: float, scale2: float) -> float:
         # Fruhwirth-Shnatter (2006) page 11
 
         mu = self._params_to_mean(p1, loc1, loc2, scale1, scale2)
@@ -104,7 +111,7 @@ class NormalMix(Mixture, Marginal):
         return p1 * part_1 + (1 - p1) * part_2 - np.power(mu, 2)
 
     
-    def _params_to_skewness(self, p1, loc1, loc2, scale1, scale2):
+    def _params_to_skewness(self, p1: float, loc1: float, loc2: float, scale1: float, scale2: float) -> float:
         # Fruhwirth-Shnatter (2006) page 11
 
         mu = self._params_to_mean(p1, loc1, loc2, scale1, scale2)
@@ -115,7 +122,7 @@ class NormalMix(Mixture, Marginal):
         return (part_1 + part_2) / np.power(variance, 3/2)
     
 
-    def _params_to_kurtosis(self, p1, loc1, loc2, scale1, scale2):
+    def _params_to_kurtosis(self, p1: float, loc1: float, loc2: float, scale1: float, scale2: float) -> float:
         # Fruhwirth-Shnatter (2006) page 11
 
         mu = self._params_to_mean(p1, loc1, loc2, scale1, scale2)
@@ -129,7 +136,7 @@ class NormalMix(Mixture, Marginal):
         return fourth_central_moment / np.power(variance, 2) - 3
     
     
-    def _params_to_cvar(self, p1, loc1, loc2, scale1, scale2, alpha = 0.95):
+    def _params_to_cvar(self, p1: float, loc1: float, loc2: float, scale1: float, scale2: float, alpha: float = 0.95) -> float:
         # Broda and Paolella (2011) Section 2.3.2
         # See also "Estimation methods for expected shortfall" by University of Manchester
         
@@ -147,7 +154,7 @@ class NormalMix(Mixture, Marginal):
 
 
 class NormalVarianceMix(Mixture, Marginal):
-    def __init__(self, p1 = 0.5, scale1 = 1, scale2 = 1, adj = 1e-4):
+    def __init__(self, p1: float = 0.5, scale1: float = 1, scale2: float = 1, adj: float = 1e-4):
 
         p1 = self._normalize_p(p1)
 
@@ -158,7 +165,7 @@ class NormalVarianceMix(Mixture, Marginal):
         Mixture.__init__(self, CenteredNormal())
 
     
-    def _get_random_params(self, n, rng, data):
+    def _get_random_params(self, n: int, rng: Generator, data: Vectorizable1d) -> np.ndarray:
         # like NormalMixture, bootstrap to get random standard deviations
         # for initialization of EM algo
 
@@ -174,7 +181,9 @@ class NormalVarianceMix(Mixture, Marginal):
         return random_params
     
 
-    def fit(self, x, seed = None, n_init = 20, tol = 1e-4, max_iter = 100, optimizer = "Powell"):
+    def fit(self, x: Vectorizable1d, seed: Union[int, None] = None, n_init: int = 20,
+             tol: float = 1e-4, max_iter: int = 100, optimizer: str = "Powell") -> None:
+        
         # input validation
 
         # running EM algo
@@ -185,23 +194,24 @@ class NormalVarianceMix(Mixture, Marginal):
         self._mini_post_process_fit(LL, x.shape[0])
     
 
-    def _pdf(self, x, p1, scale1, scale2):
+    def _pdf(self, x: Vectorizable, p1: float, scale1: float, scale2: float) -> Vectorizable:
         # linear mix
         return self._mixture_pdf(p1, (scale1,), (scale2,), x)
     
 
-    def _cdf(self, x, p1, scale1, scale2):
+    def _cdf(self, x: Vectorizable, p1: float, scale1: float, scale2: float) -> Vectorizable:
         # linear mix
         return self._mixture_cdf(p1, (scale1,), (scale2,), x)
     
 
-    def _ppf(self, q, *params):
+    def _ppf(self, q: Vectorizable, *params: float) -> Vectorizable:
         # Brent Q solver
         a, b = self._get_lower_upper_bound(*params)
         return utils.solve_for_ppf(self._cdf, q, a, b, *params)
     
 
-    def _get_lower_upper_bound(self, p1, scale1, scale2, Z_factor = 5):
+    def _get_lower_upper_bound(self, p1: float, scale1: float, scale2: float, Z_factor: float = 5) -> Tuple[float, float]:
+
         # finds boundaries needed for Brent Q solving of inverse cdf
         # p1 is unused
 
@@ -209,7 +219,7 @@ class NormalVarianceMix(Mixture, Marginal):
         return Z_factor * biggest_sigma, -Z_factor * biggest_sigma
     
 
-    def simulate(self, n = 1000, seed = None):
+    def simulate(self, n: int = 1000, seed: Union[int, None] = None) -> np.ndarray:
         # potentially faster than relying on solver for large n
         # we can sidestep the ppf by
         
@@ -222,19 +232,19 @@ class NormalVarianceMix(Mixture, Marginal):
         return np.array([rng.normal(0, sigmas[i]) for i in range(n)])
     
 
-    def _params_to_variance(self, p1, scale1, scale2):
+    def _params_to_variance(self, p1: float, scale1: float, scale2: float) -> float:
         # Carol Alexander I.3.45
         # linear mix
         return p1 * np.power(scale1, 2) + (1 - p1) * np.power(scale2, 2)
     
 
-    def _params_to_skewness(self, *params):
+    def _params_to_skewness(self, *params: float) -> float:
         # always zero for variance mixture
         # can only be non-zero in normal mixture by shifting mean
         return 0
     
 
-    def _params_to_kurtosis(self, p1, scale1, scale2):
+    def _params_to_kurtosis(self, p1: float, scale1: float, scale2: float) -> float:
         # Carol Alexander I.3.46
 
         variance = self._params_to_variance(p1, scale1, scale2)
@@ -244,7 +254,7 @@ class NormalVarianceMix(Mixture, Marginal):
         return 3 * numerator / np.power(variance, 2) - 3
     
 
-    def _params_to_cvar(self, p1, scale1, scale2, alpha = 0.95):
+    def _params_to_cvar(self, p1: float, scale1: float, scale2: float, alpha: float = 0.95) -> float:
         # Carol Alexander IV.2.89
         # I couldn't get her formula for the general NormalMixture to work, but this works for the VarianceMixture case
 

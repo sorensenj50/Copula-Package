@@ -4,16 +4,18 @@ import base
 import numpy as np
 from datetime import datetime
 
+from typing import Union, Callable, Tuple
+from type_definitions import Vectorizable
+
 
 class BivariateCopula(base.Base):
     def __init__(self, *args, **kwargs):
-        print("Hello 22")
         self.summary_title = "Bivariate Copula"
         self.estimation_method_str = "CMLE"
         super().__init__(*args, **kwargs)
     
 
-    def _handle_u_input(self, u, adj):
+    def _handle_u_input(self, u: Vectorizable, adj: float):
         if not (utils.is_arraylike(u) or utils.is_number(u)):
             # must be number or array
 
@@ -22,7 +24,7 @@ class BivariateCopula(base.Base):
         return utils.clip_u_input(u, adj)
 
 
-    def _handle_uu_input(self, u1, u2, adj):
+    def _handle_uu_input(self, u1: Vectorizable, u2: Vectorizable, adj: float) -> Vectorizable:
         # fix this logic
 
         # u1 and u2 are both valid individually
@@ -42,7 +44,7 @@ class BivariateCopula(base.Base):
         raise TypeError
     
     
-    def _reshape_wrapper(self, u1, u2, f, *params):
+    def _reshape_wrapper(self, u1: Vectorizable, u2: Vectorizable, f: Callable, *params: float) -> Vectorizable:
         # if u1 and u2 are arrays, ensures flat input and reshapes after applying function
         # because of earlier validation, if 1 is array, then both are
 
@@ -52,16 +54,18 @@ class BivariateCopula(base.Base):
 
         return f(u1, u2, *params)
     
+
     @property
-    def tau(self):
+    def tau(self) -> float:
         return self._params_to_tau(*self.params)
 
-    def _tau_to_params(self, tau):
+
+    def _tau_to_params(self, tau: float) -> Tuple[float, ...]:
         # return a tuple
         return (np.nan,)
     
 
-    def _params_to_tau(self, *params):
+    def _params_to_tau(self, *params: float) -> float:
         # Default is brute force numerical integration
         # using the formulation from Joe 2.42
         # this assumes copula is symmetric (i.e., that u1 and u2 can be swapped to the same conditional_cdf)
@@ -74,11 +78,11 @@ class BivariateCopula(base.Base):
 
     
     @property
-    def rho(self):
+    def rho(self) -> float:
         return self._params_to_rho(*self.params)
 
 
-    def _params_to_rho(self, *params):
+    def _params_to_rho(self, *params: float) -> float:
         # Default is brute force numerical integration
         # using the formulation from Joe 2.47
 
@@ -88,11 +92,12 @@ class BivariateCopula(base.Base):
         return 12 * np.sum(self._cdf(u1.flatten(), u2.flatten(), *params) * dudv) - 3
     
 
-    def _log_likelihood(self, u1, u2, *params):
+    def _log_likelihood(self, u1: Vectorizable, u2: Vectorizable, *params: float) -> float:
         return np.sum(self._logpdf(u1, u2, *params))
     
     
-    def fit(self, u1, u2, method = "MLE", optimizer = "Powell", initial_param_guesses = None, robust_cov = True, adj = 1e-4):
+    def fit(self, u1: Vectorizable, u2: Vectorizable, method: str = "MLE", optimizer: str = "Powell", 
+            initial_param_guesses: Union[list, None] = None, robust_cov: bool = True, adj: float = 1e-4) -> None:
 
         # input validation
         u1_valid, u2_valid = self._handle_uu_input(u1, u2, adj = adj)
@@ -112,7 +117,7 @@ class BivariateCopula(base.Base):
         
 
     # abstract this function to fit
-    def fit_mm(self, u1, u2, robust_cov = True, adj = 1e-4):
+    def fit_mm(self, u1: float, u2: float, robust_cov: bool = True, adj: float = 1e-4) -> None:
 
         u1_valid, u2_valid = self._handle_uu_input(u1, u2, adj = adj)
         tau = utils.empirical_kendall_tau(u1, u2)
@@ -125,7 +130,7 @@ class BivariateCopula(base.Base):
                                opt_params, objective_func=objective_func, robust_cov = robust_cov)
     
 
-    def _get_top_summary_table(self):
+    def _get_top_summary_table(self) -> Tuple[list, list]:
 
         now = datetime.now()
         top_left = [
@@ -145,44 +150,44 @@ class BivariateCopula(base.Base):
         return top_left, top_right
     
 
-    def logpdf(self, u1, u2, adj = 1e-4):
+    def logpdf(self, u1: Vectorizable, u2: Vectorizable, adj: float = 1e-4) -> Vectorizable:
         valid_u1, valid_u2 = self._handle_uu_input(u1, u2, adj = adj)
         return self._logpdf(valid_u1, valid_u2, *self.params)
     
 
-    def _logpdf(self, u1, u2, *params):
+    def _logpdf(self, u1: Vectorizable, u2: Vectorizable, *params: float) -> Vectorizable:
         raise NotImplementedError
 
 
-    def pdf(self, u1, u2, adj = 1e-5): 
+    def pdf(self, u1: Vectorizable, u2: Vectorizable, adj: float = 1e-5) -> Vectorizable: 
         valid_u1, valid_u2 = self._handle_uu_input(u1, u2, adj = adj)
         return self._pdf(valid_u1, valid_u2, *self.params)
     
 
-    def _pdf(self, u1, u2, *params):
+    def _pdf(self, u1: Vectorizable, u2: Vectorizable, *params: float) -> Vectorizable:
         #exp of log pdf
         return np.exp(self._logpdf(u1, u2, *params))
     
 
-    def cdf(self, u1, u2, adj = 1e-5):
+    def cdf(self, u1: Vectorizable, u2: Vectorizable, adj: float = 1e-5) -> Vectorizable:
         valid_u1, valid_u2 = self._handle_uu_input(u1, u2, adj = adj)
         return self._reshape_wrapper(valid_u1, valid_u2, self._cdf, *self.params)
     
 
-    def _cdf(self, u1, u2, *params):
+    def _cdf(self, u1: Vectorizable, u2: Vectorizable, *params: float) -> Vectorizable:
         raise NotImplementedError
     
 
-    def conditional_cdf(self, u1, u2, adj = 1e-4):
+    def conditional_cdf(self, u1: Vectorizable, u2: Vectorizable, adj: float = 1e-4) -> Vectorizable:
         valid_u1, valid_u2 = self._handle_uu_input(u1, u2, adj = adj)
         return self._conditional_cdf(valid_u1, valid_u2, *self.params)
     
 
-    def _conditional_cdf(self, u1, u2, *params):
+    def _conditional_cdf(self, u1: Vectorizable, u2: Vectorizable, *params: float) -> Vectorizable:
         raise NotImplementedError
     
 
-    def conditional_ppf(self, u1, q, adj = 1e-4):
+    def conditional_ppf(self, u1: Vectorizable, q: Vectorizable, adj: float = 1e-4) -> Vectorizable:
         # what is the q-th quantile of u2 given u1?
         # i.e., what is the median given u1 = 0.01?
 
@@ -190,7 +195,7 @@ class BivariateCopula(base.Base):
         return self._conditional_ppf(u1, q, *self.params)
     
     
-    def _conditional_ppf(self, u1, q, *params, adj = 1e-6):
+    def _conditional_ppf(self, u1: Vectorizable, q: Vectorizable, *params: float, adj: float = 1e-6) -> Vectorizable:
 
         # default implementation of the conditional quantile function uses numerical optimization method
         # on condtional cdf to find inverse
@@ -200,43 +205,44 @@ class BivariateCopula(base.Base):
 
     
     @property
-    def lower_tail(self):
+    def lower_tail(self) -> float:
         return self._lower_tail_dependance(*self.params)
 
 
-    def _lower_tail_dependance(self, *params):
+    def _lower_tail_dependance(self, *params: float) -> float:
         # the limit of "quantile dependance" when q approaches 0
         # adjustment factor is used for q
         raise NotImplementedError
     
 
     @property
-    def upper_tail(self):
+    def upper_tail(self) -> float:
         return self._upper_taiL_dependance(*self.params)
 
 
-    def _upper_taiL_dependance(self, *params):
+    def _upper_taiL_dependance(self, *params: float) -> float:
         # the limit of "quantile dependance" when q approaches 1
         # adjustment factor is used for q
         # too numerically unstable to use numerical methods
         raise NotImplementedError
 
  
-    def quantile_dependance(self, q, adj = 1e-4):
+    def quantile_dependance(self, q: Vectorizable, adj: float = 1e-4) -> Vectorizable:
         # this doesn't work for scalar inputs
         valid_q = self._handle_u_input(q, adj = adj)
         return self._quantile_dependance(valid_q, *self.params)
     
 
-    def _quantile_dependance(self, q, *params):
+    def _quantile_dependance(self, q: Vectorizable, *params: float) -> Vectorizable:
         # if q > 0.5: probability of u2 > q given u1 > q
         # if q < 0.5: probability of u2 < q given u1 < q
         # this can be thought of geometrically using the CDF
+
         qq_point = self._cdf(q, q, *params)
         return np.where(q > 0.5, (1 - 2 * q + qq_point) / (1 - q), qq_point / q)
     
 
-    def simulate(self, n = 1000, seed = None, adj = 1e-6):
+    def simulate(self, n: int = 1000, seed: Union[int, None] = None, adj: float = 1e-6) -> Tuple[np.ndarray, np.ndarray]:
 
         rng = np.random.default_rng(seed = seed)
 

@@ -4,10 +4,14 @@ from .bivariate_copula import BivariateCopula
 from .elliptical import Normal
 from mixture import Mixture
 
+from numpy.random import Generator
+from type_definitions import Vectorizable
+from typing import Union, Tuple
 
-# re write to use Mixture pdf / cdf / ppf
+
+
 class NormalMix(Mixture, BivariateCopula):
-    def __init__(self, p1 = 0.5, Q1 = 0, Q2 = 0, adj = 1e-4):
+    def __init__(self, p1: float = 0.5, Q1: float = 0, Q2: float = 0, adj: float = 1e-4):
 
         # case if lengths of p and Q disagree / with n_normals
         p1 = self._normalize_p(p1)
@@ -19,13 +23,15 @@ class NormalMix(Mixture, BivariateCopula):
         Mixture.__init__(self, Normal())
     
 
-    def _get_random_params(self, n, rng, *data, adj = 1e-4):
+    def _get_random_params(self, n: int, rng: Generator, *data: Vectorizable, adj: float = 1e-4) -> np.ndarray:
         # ensuring that correlation parameter is safely not 1 or -1
         # data argument is unused
         return rng.uniform(-1 + adj, 1 - adj, size = (n, 1))    
 
 
-    def fit(self, u1, u2, seed = None, n_init = 20, tol = 1e-4, max_iter = 100, optimizer = "Powell"):
+    def fit(self, u1: Vectorizable, u2: Vectorizable, seed: Union[int, None] = None, 
+            n_init: int = 20, tol: float = 1e-4, max_iter: int = 100, optimizer: str = "Powell") -> None:
+        
         LL, p1, Q1, Q2 = self._run_em_algo_multi(u1, u2, seed = seed, n_init = n_init, tol = tol, 
                                                  max_iter = max_iter, optimizer = optimizer)
         
@@ -33,24 +39,24 @@ class NormalMix(Mixture, BivariateCopula):
         self._set_params((p1, Q1, Q2))
 
 
-    def _pdf(self, u1, u2, p1, Q1, Q2):
+    def _pdf(self, u1: Vectorizable, u2: Vectorizable, p1: float, Q1: float, Q2: float) -> Vectorizable:
         return self._mixture_pdf(p1, (Q1,), (Q2,), u1, u2)
     
 
-    def _logpdf(self, u1, u2, p1, Q1, Q2):
+    def _logpdf(self, u1: Vectorizable, u2: Vectorizable, p1: float, Q1: float, Q2: float) -> Vectorizable:
         return np.log(self._pdf(u1, u2, p1, Q1, Q2))
 
 
-    def _cdf(self, u1, u2, p1, Q1, Q2):
+    def _cdf(self, u1: Vectorizable, u2: Vectorizable, p1: float, Q1: float, Q2: float) -> Vectorizable:
         return self._mixture_cdf(p1, (Q1,), (Q2,), u1, u2)
     
 
-    def _conditional_cdf(self, u1, u2, p1, Q1, Q2):
+    def _conditional_cdf(self, u1: Vectorizable, u2: Vectorizable, p1: float, Q1: float, Q2: float) -> Vectorizable:
         # cdf of u2 conditioned on u1
         return p1 * self._base_model._conditional_cdf(u1, u2, Q1) + (1 - p1) * self._base_model._conditional_cdf(u1, u2, Q2)
     
 
-    def simulate(self, n = 1000, seed = None, adj = 1e-4):
+    def simulate(self, n: int = 1000, seed: Union[int, None] = None, adj: float = 1e-4) -> Tuple[np.ndarray, np.ndarray]:
 
         p1, Q1, Q2 = self.params
 
@@ -66,15 +72,15 @@ class NormalMix(Mixture, BivariateCopula):
         return u1, u2
     
 
-    def _lower_tail_dependance(self, *params):
+    def _lower_tail_dependance(self, *params: float) -> float:
         return 0
     
 
-    def _upper_taiL_dependance(self, *params):
+    def _upper_taiL_dependance(self, *params: float) -> float:
         return 0
     
 
-    def _get_extra_text(self):
+    def _get_extra_text(self) -> str:
 
         text_list = ["Tau and Rho calculated using numerical integration of CDF", 
                      "Conditional PPF solved using Brent's Method"]

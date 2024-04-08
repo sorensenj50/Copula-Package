@@ -7,10 +7,12 @@ from statsmodels.tools.numdiff import approx_hess3, approx_fprime
 from statsmodels.iolib.summary import Summary, fmt_params, fmt_2cols
 from statsmodels.iolib.table import SimpleTable
 
+from typing import Collection, Callable, Union
+from type_definitions import Vectorizable
 
 
 class Base:
-    def __init__(self, model_name, family_name, initial_param_guess, param_bounds, param_names, params):
+    def __init__(self, model_name: str, family_name: str, initial_param_guess: Union[list, tuple], param_bounds: Union[list, tuple], param_names: Union[list, tuple], params: Union[list, tuple]):
 
         self.model_name = model_name
         self.family_name = family_name
@@ -35,50 +37,50 @@ class Base:
         self.conf_int = np.full((self.k, 2), np.nan); self.t = np.full(self.k, np.nan); self.p = np.full(self.k, np.nan)
 
 
-    def _validate_params(self, params, param_names, param_bounds):
+    def _validate_params(self, params: Union[list, tuple], param_names: Union[list, tuple], param_bounds: Union[list, tuple]) -> None:
         for i, param in enumerate(params):
             if param < param_bounds[i][0] or param > param_bounds[i][1]:
                 print(param_names[i], "parameter outside of valid boundaries")
                 raise SyntaxError
 
 
-    def _set_params(self, params):
+    def _set_params(self, params: Union[list, tuple]) -> None:
         self.params = params
         self.params_dict = {k:v for k, v in zip(self.param_names, params)}
 
 
     # has to handle multiple datapoints because bivariate copulas have two data inputs
 
-    def _fit(self, f, initial_param_guess, param_bounds, optimizer = "Powell"):
+    def _fit(self, f: Callable, initial_param_guess: Union[list, tuple], param_bounds: Union[list, tuple], optimizer: str = "Powell"):
         # defualt mle optimization (aka canonical likelihood implementation)
         return minimize(f, initial_param_guess, bounds = param_bounds, method = optimizer)
     
 
-    def _get_obj_func(self, *data):
+    def _get_obj_func(self, *data: Vectorizable) -> Callable:
         return lambda params: -1 * self._log_likelihood(*data, *params)
     
 
-    def _get_weighted_obj_func(self, weights, *data):
+    def _get_weighted_obj_func(self, weights: Vectorizable, *data: Vectorizable) -> Callable:
         return lambda params: -np.sum(weights * self._logpdf(*data, *params))
     
 
-    def _get_gradient_func(self, opt_params_arr):
+    def _get_gradient_func(self, opt_params_arr: np.ndarray) -> Callable:
         return lambda data: approx_fprime(opt_params_arr, lambda params: self._log_likelihood(*data, *params), epsilon = 1e-5)
     
 
-    def _get_inv_hessian_matrix(self, opt_params_arr, objective_func):
+    def _get_inv_hessian_matrix(self, opt_params_arr: np.ndarray, objective_func: Callable) -> np.ndarray:
         return np.linalg.inv(approx_hess3(opt_params_arr, objective_func))
     
 
-    def _se_from_matrix(self, matrix):
+    def _se_from_matrix(self, matrix: np.ndarray) -> np.ndarray:
         return np.sqrt(np.diag(matrix))
     
 
-    def _get_se(self, opt_params_arr, objective_func):
+    def _get_se(self, opt_params_arr: np.ndarray, objective_func: Callable) -> np.ndarray:
         return self._se_from_matrix(self._get_inv_hessian_matrix(opt_params_arr, objective_func))
     
 
-    def _get_robust_se(self, data_arr, opt_params_arr, objective_func):
+    def _get_robust_se(self, data_arr: Vectorizable, opt_params_arr: np.ndarray, objective_func: Callable) -> np.ndarray:
 
         inv_hess_matrix = self._get_inv_hessian_matrix(opt_params_arr, objective_func)
         grad_func = self._get_gradient_func(opt_params_arr)
@@ -95,15 +97,15 @@ class Base:
         return self._se_from_matrix(inv_hess_matrix @ S @ inv_hess_matrix)
 
 
-    def _calc_aic(self, LL, k):
+    def _calc_aic(self, LL: float, k: int) -> float:
         return 2 * k - LL
     
 
-    def _calc_bic(self, LL, n):
+    def _calc_bic(self, LL: float, n: int) -> float:
         return 2 * np.log(n) - 2 * LL
 
 
-    def _post_process_fit(self, data_arr, opt_params_arr, objective_func, robust_cov = True):
+    def _post_process_fit(self, data_arr: Vectorizable, opt_params_arr: np.ndarray, objective_func: Callable, robust_cov: bool = True) -> None:
         
         self.is_fit = True
         self.LL = -1 * objective_func(opt_params_arr)
@@ -136,6 +138,7 @@ class Base:
         # setting params
         self._set_params(tuple(opt_params_arr))
 
+
     def _get_estimation_method(self):
         if self.is_fit:
             return self.estimation_method_str
@@ -147,7 +150,7 @@ class Base:
         return self._summary([self], [None])
 
 
-    def _summary(self, model_objects, model_names):
+    def _summary(self, model_objects: list, model_names: list[str]) -> str:
         # returns a printable "statsmodel like" summary of the model
         # I heavily relied on the code from the Arch package which also used the statsmodel iolibrary to implement a summary
 
@@ -193,7 +196,7 @@ class Base:
         return ["Covariance Method: {}".format("robust" if self.robust_cov else "classical")]
 
     
-    def _make_summary_table(self, model_obj, model_name, fmt_params):
+    def _make_summary_table(self, model_obj, model_name: str,  fmt_params: dict) -> SimpleTable:
         data = []
         for _, (param, guess, std_err, t_val, p_val, ci) in enumerate(zip(model_obj.params, model_obj.initial_param_guess, model_obj.se, model_obj.t, model_obj.p, model_obj.conf_int)):
             data.append([

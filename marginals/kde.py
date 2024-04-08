@@ -4,9 +4,14 @@ from scipy import stats
 from .marginals import Marginal
 import utils
 
+from typing import Union, Callable, Tuple
+from type_definitions import Vectorizable, Vectorizable1d
+
 
 class GaussianKDE(Marginal):
-    def __init__(self, bw_method = None, Z_factor = 5, interpolation_n = 2000, monte_carlo_n = 10_000, monte_carlo_seed = None):
+    def __init__(self, bw_method: Union[str, None] = None, Z_factor: float = 5, 
+                 interpolation_n: int = 2000, monte_carlo_n: int = 10_000, monte_carlo_seed: Union[int, None] = None):
+        
         # bw_method passed to scipy.stats.gaussian_kde
         # can be scalar, "scott", "silverman", or callable
 
@@ -30,7 +35,7 @@ class GaussianKDE(Marginal):
 
         
     
-    def fit(self, x):
+    def fit(self, x: Vectorizable1d) -> None:
         # check that univariate
         self.kde = stats.gaussian_kde(x, bw_method = self.bw_method)
 
@@ -47,7 +52,7 @@ class GaussianKDE(Marginal):
         self._skew, self._kurtosis, self._cvar = utils._monte_carlo_stats(self)
 
 
-    def _set_cdf_ppf(self, min_x, max_x):
+    def _set_cdf_ppf(self, min_x: float, max_x: float) -> None:
         # overriding method defined in parent class
         # Z: number of standard deviatons above or below to evaluate range
 
@@ -64,7 +69,7 @@ class GaussianKDE(Marginal):
         self.interp1d_cdf_func, self.interp1d_ppf_func = utils.build_cdf_interpolations(x_range, cdf_values)
 
 
-    def get_bw_method_desc(self, bw_method):
+    def get_bw_method_desc(self, bw_method: str) -> str:
         if (bw_method == "scott") or (bw_method == "silverman"):
             return bw_method
         elif callable(bw_method):
@@ -73,47 +78,47 @@ class GaussianKDE(Marginal):
             return "user set"
 
 
-    def _pdf(self, x):
+    def _pdf(self, x: Vectorizable1d) -> Vectorizable1d:
         return self.kde(x)
     
 
-    def _logpdf(self, x):
+    def _logpdf(self, x: Vectorizable1d) -> Vectorizable1d:
         return np.log(self._pdf(x))
     
 
-    def cdf(self, x):
+    def cdf(self, x: Vectorizable1d) -> Vectorizable1d:
         # error handling
         return self._cdf(x)
     
 
-    def _cdf(self, x):
+    def _cdf(self, x: Vectorizable1d) -> Vectorizable1d:
         return self.interp1d_cdf_func(x)
     
 
-    def ppf(self, q):
+    def ppf(self, q: Vectorizable1d) -> Vectorizable1d:
         # error handling
         return self._ppf(q)
     
 
-    def _ppf(self, q):
+    def _ppf(self, q: Vectorizable1d) -> Vectorizable1d:
         return self.interp1d_ppf_func(q)
     
 
-    def _params_to_skewness(self, *params):
+    def _params_to_skewness(self, *params) -> float:
         # Monte Carlo
         return self._skew
     
     
-    def _params_to_kurtosis(self, *params):
+    def _params_to_kurtosis(self, *params) -> float:
         # Monte Carlo
         return self._kurtosis
     
 
-    def _params_to_cvar(self, *params, alpha=0.95):
+    def _params_to_cvar(self, *params, alpha: float = 0.95) -> float:
         # alpha is unused
         return self._cvar
     
 
-    def _get_extra_text(self):
+    def _get_extra_text(self) -> float:
         return ["PPF Estimated via Numerical Interpolation of CDF",
                 "Skewness, Kurtosis, and CVaR Estimated via Monte Carlo"]
