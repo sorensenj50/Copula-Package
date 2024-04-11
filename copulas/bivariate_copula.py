@@ -15,7 +15,7 @@ class BivariateCopula(base.Base):
         super().__init__(*args, **kwargs)
     
 
-    def _handle_u_input(self, u: Vectorizable, adj: float):
+    def _handle_u_input(self, u: Vectorizable, adj: float = 1e-5):
         if not (utils.is_arraylike(u) or utils.is_number(u)):
             # must be number or array
 
@@ -97,7 +97,7 @@ class BivariateCopula(base.Base):
     
     
     def fit(self, u1: Vectorizable, u2: Vectorizable, method: str = "MLE", optimizer: str = "Powell", 
-            initial_param_guesses: Union[list, None] = None, robust_cov: bool = True, adj: float = 1e-4) -> None:
+            initial_param_guesses: Union[list, None] = None, robust_cov: bool = True, adj: float = 1e-5) -> None:
 
         # input validation
         u1_valid, u2_valid = self._handle_uu_input(u1, u2, adj = adj)
@@ -117,7 +117,7 @@ class BivariateCopula(base.Base):
         
 
     # abstract this function to fit
-    def fit_mm(self, u1: float, u2: float, robust_cov: bool = True, adj: float = 1e-4) -> None:
+    def fit_mm(self, u1: float, u2: float, robust_cov: bool = True, adj: float = 1e-5) -> None:
 
         u1_valid, u2_valid = self._handle_uu_input(u1, u2, adj = adj)
         tau = utils.empirical_kendall_tau(u1, u2)
@@ -150,7 +150,7 @@ class BivariateCopula(base.Base):
         return top_left, top_right
     
 
-    def logpdf(self, u1: Vectorizable, u2: Vectorizable, adj: float = 1e-4) -> Vectorizable:
+    def logpdf(self, u1: Vectorizable, u2: Vectorizable, adj: float = 1e-5) -> Vectorizable:
         valid_u1, valid_u2 = self._handle_uu_input(u1, u2, adj = adj)
         return self._logpdf(valid_u1, valid_u2, *self.params)
     
@@ -174,28 +174,29 @@ class BivariateCopula(base.Base):
         return self._reshape_wrapper(valid_u1, valid_u2, self._cdf, *self.params)
     
 
-    def _cdf(self, u1: Vectorizable, u2: Vectorizable, *params: float) -> Vectorizable:
+    def _cdf(self, u1: Vectorizable, u2: Vectorizable, *params: float, adj = 1e-5) -> Vectorizable:
         raise NotImplementedError
     
 
-    def conditional_cdf(self, u1: Vectorizable, u2: Vectorizable, adj: float = 1e-4) -> Vectorizable:
+    def conditional_cdf(self, u1: Vectorizable, u2: Vectorizable, adj: float = 1e-5) -> Vectorizable:
         valid_u1, valid_u2 = self._handle_uu_input(u1, u2, adj = adj)
         return self._conditional_cdf(valid_u1, valid_u2, *self.params)
     
 
-    def _conditional_cdf(self, u1: Vectorizable, u2: Vectorizable, *params: float) -> Vectorizable:
+    def _conditional_cdf(self, u1: Vectorizable, u2: Vectorizable, *params: float, adj: float = 1e-5) -> Vectorizable:
         raise NotImplementedError
     
 
-    def conditional_ppf(self, u1: Vectorizable, q: Vectorizable, adj: float = 1e-4) -> Vectorizable:
+    def conditional_ppf(self, u1: Vectorizable, q: Vectorizable, adj: float = 1e-5) -> Vectorizable:
         # what is the q-th quantile of u2 given u1?
         # i.e., what is the median given u1 = 0.01?
+        # adj only used 
 
         u1, q = self._handle_uu_input(u1, q, adj = adj)
-        return self._conditional_ppf(u1, q, *self.params)
+        return self._conditional_ppf(u1, q, *self.params, adj = adj)
     
     
-    def _conditional_ppf(self, u1: Vectorizable, q: Vectorizable, *params: float, adj: float = 1e-6) -> Vectorizable:
+    def _conditional_ppf(self, u1: Vectorizable, q: Vectorizable, *params: float, adj: float = 1e-5) -> Vectorizable:
 
         # default implementation of the conditional quantile function uses numerical optimization method
         # on condtional cdf to find inverse
@@ -227,7 +228,7 @@ class BivariateCopula(base.Base):
         raise NotImplementedError
 
  
-    def quantile_dependance(self, q: Vectorizable, adj: float = 1e-4) -> Vectorizable:
+    def quantile_dependance(self, q: Vectorizable, adj: float = 1e-5) -> Vectorizable:
         # this doesn't work for scalar inputs
         valid_q = self._handle_u_input(q, adj = adj)
         return self._quantile_dependance(valid_q, *self.params)
@@ -242,12 +243,12 @@ class BivariateCopula(base.Base):
         return np.where(q > 0.5, (1 - 2 * q + qq_point) / (1 - q), qq_point / q)
     
 
-    def simulate(self, n: int = 1000, seed: Union[int, None] = None, adj: float = 1e-6) -> Tuple[np.ndarray, np.ndarray]:
+    def simulate(self, n: int = 1000, seed: Union[int, None] = None, adj: float = 1e-5) -> Tuple[np.ndarray, np.ndarray]:
 
         rng = np.random.default_rng(seed = seed)
 
         u1 = rng.uniform(size = n)
         q = rng.uniform(size = n)
-        u2 = self._conditional_ppf(u1, q, *self.params, adj = adj)
+        u2 = self.conditional_ppf(u1, q, adj = adj)
         
         return u1, u2

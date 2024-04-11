@@ -11,7 +11,7 @@ from typing import Union, Tuple
 
 
 class NormalMix(Mixture, BivariateCopula):
-    def __init__(self, p1: float = 0.5, Q1: float = 0, Q2: float = 0, adj: float = 1e-4):
+    def __init__(self, p1: float = 0.5, Q1: float = 0, Q2: float = 0, adj: float = 1e-5):
 
         # case if lengths of p and Q disagree / with n_normals
         p1 = self._normalize_p(p1)
@@ -23,7 +23,7 @@ class NormalMix(Mixture, BivariateCopula):
         Mixture.__init__(self, Normal())
     
 
-    def _get_random_params(self, n: int, rng: Generator, *data: Vectorizable, adj: float = 1e-4) -> np.ndarray:
+    def _get_random_params(self, n: int, rng: Generator, *data: Vectorizable, adj: float = 1e-5) -> np.ndarray:
         # ensuring that correlation parameter is safely not 1 or -1
         # data argument is unused
         return rng.uniform(-1 + adj, 1 - adj, size = (n, 1))    
@@ -56,7 +56,7 @@ class NormalMix(Mixture, BivariateCopula):
         return p1 * self._base_model._conditional_cdf(u1, u2, Q1) + (1 - p1) * self._base_model._conditional_cdf(u1, u2, Q2)
     
 
-    def simulate(self, n: int = 1000, seed: Union[int, None] = None, adj: float = 1e-4) -> Tuple[np.ndarray, np.ndarray]:
+    def simulate(self, n: int = 1000, seed: Union[int, None] = None, adj: float = 1e-5) -> Tuple[np.ndarray, np.ndarray]:
 
         p1, Q1, Q2 = self.params
 
@@ -67,7 +67,7 @@ class NormalMix(Mixture, BivariateCopula):
         u2 = np.empty(shape = n)
 
         for i, Q in enumerate(param_draw):
-            u2[i] = self._base_model._conditional_ppf(u1[i], q[i], Q, adj = adj)
+            u2[i] = self._base_model.conditional_ppf(u1[i], q[i], Q, adj = adj)
 
         return u1, u2
     

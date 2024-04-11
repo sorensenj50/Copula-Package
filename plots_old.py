@@ -167,6 +167,10 @@ def quantile_dependance(u1, u2, copula = None, copula_label = None, show_indep =
 
 
 
+
+
+
+
     
 
     

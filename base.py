@@ -31,6 +31,7 @@ class Base:
 
         # these variables are calculated post-fit
         # initializing them here for clarity of what variables are included in this object
+        
         self.n = np.nan
         self.LL = np.nan; self.aic = np.nan; self.bic = np.nan
         self.hess_matrix = np.full((self.k, self.k), np.nan); self.se = np.full(self.k, np.nan)

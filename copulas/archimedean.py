@@ -96,7 +96,7 @@ class Archimedean(BivariateCopula):
 
 
 class Clayton(Archimedean):
-    def __init__(self, theta: float = 1e-4, rotation: int = 0, adj: float = 1e-4):
+    def __init__(self, theta: float = 1e-5, rotation: int = 0, adj: float = 1e-5):
         super().__init__(rotation = rotation, model_name = "Clayton", family_name = "Archimedean", 
                          initial_param_guess = [adj],
                          param_bounds = [(adj, np.inf)], param_names = ("theta",), params = (theta,))
@@ -131,7 +131,7 @@ class Clayton(Archimedean):
         return self._cond_rot_func2(A * B)
     
 
-    def _conditional_ppf(self, u1: Vectorizable, q: Vectorizable, theta: float, adj: float = 1e-4) -> Vectorizable:
+    def _conditional_ppf(self, u1: Vectorizable, q: Vectorizable, theta: float, adj: float = 1e-5) -> Vectorizable:
         # adj not used, there for consistency
 
         rot_u1, rot_q = self._cond_rot_func1(u1, q)
@@ -152,7 +152,7 @@ class Clayton(Archimedean):
 
 
 class Frank(Archimedean):
-    def __init__(self, theta: float = 1e-4, rotation: float = 0):
+    def __init__(self, theta: float = 0, rotation: float = 0):
         super().__init__(rotation = rotation, model_name = "Frank", family_name = "Archimedean",
                          initial_param_guess = [0],
                          param_bounds = [(-np.inf, np.inf)], param_names = ("theta",),
@@ -218,8 +218,8 @@ class Frank(Archimedean):
         return self._cond_rot_func2(num / denom)
     
     
-    def _conditional_ppf(self, u1: Vectorizable, q: Vectorizable, theta: float, adj: float = 1e-4) -> Vectorizable:
-        # adj there for consistency
+    def _conditional_ppf(self, u1: Vectorizable, q: Vectorizable, theta: float, adj: float = 1e-5) -> Vectorizable:
+        # adj not used
 
         rot_u1, rot_q = self._cond_rot_func1(u1, q)
 
@@ -282,7 +282,8 @@ class Gumbel(Archimedean):
         return self._cdf_rot_func(u1, u2, C)
     
 
-    def _conditional_cdf(self, u1: Vectorizable, u2: Vectorizable, theta: float) -> Vectorizable:
+    def _conditional_cdf(self, u1: Vectorizable, u2: Vectorizable, theta: float, adj = 1e-5) -> Vectorizable:
+        # adj not used
         # conditional of u2 given u1
         rot_u1, rot_u2 = self._cond_rot_func1(u1, u2)    
 

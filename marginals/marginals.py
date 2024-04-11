@@ -18,7 +18,7 @@ class Marginal(base.Base):
         super().__init__(*args, **kwargs)
 
 
-    def _handle_input(self, x_or_u: Vectorizable, is_x: bool = True, adj: float = 1e-4) -> Vectorizable:
+    def _handle_input(self, x_or_u: Vectorizable, is_x: bool = True, adj: float = 1e-5) -> Vectorizable:
         if not (utils.is_arraylike(x_or_u) or utils.is_number(x_or_u)):
             raise SyntaxError
 
@@ -46,7 +46,7 @@ class Marginal(base.Base):
         return self.rv_obj.pdf(x, *params)
 
 
-    def ppf(self, q: Vectorizable, adj: float = 1e-6) -> Vectorizable:
+    def ppf(self, q: Vectorizable, adj: float = 1e-5) -> Vectorizable:
         # input validation
         return self._ppf(self._handle_input(q, is_x = False, adj = adj), *self.params)
 
@@ -80,11 +80,11 @@ class Marginal(base.Base):
                                self._get_obj_func(valid_x), robust_cov = robust_cov)
 
     
-    def simulate(self, n: int = 1000, seed: Union[int, None] = None, adj: float = 1e-6) -> np.ndarray:
+    def simulate(self, n: int = 1000, seed: Union[int, None] = None, adj = 1e-5) -> np.ndarray:
         # rely on Scipy
         rng = np.random.default_rng(seed = seed)
         u = rng.uniform(size = n)
-        return self.ppf(u, adj = 1e-6)
+        return self.ppf(u, adj = adj)
     
 
     def _get_top_summary_table(self) -> Tuple[list, list]:

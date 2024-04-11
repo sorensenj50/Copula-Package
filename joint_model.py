@@ -19,8 +19,6 @@ class JointModel(Base):
 
         # not initializing parent class
 
-    # don't need core and inner implementations because this will not have child classes
-
     def fit(self, x1, x2, method = "CMLE", copula_fit_kwargs = {}, marginal1_fit_kwargs = {}, marginal2_fit_kwargs = {}):
         # error handling
 
@@ -46,8 +44,8 @@ class JointModel(Base):
 
     def pdf(self, x1, x2):
         # insert formula here
-        # error handling
-        return np.exp(self._logpdf(x1, x2))
+        # error handlingx
+        return np.exp(self.logpdf(x1, x2))
 
         
     def logpdf(self, x1, x2):
@@ -70,7 +68,7 @@ class JointModel(Base):
         return x1, x2
     
 
-    def conditional_ppf(self, x1, q, adj = 1e-4):
+    def conditional_ppf(self, x1, q, adj = 1e-5):
 
         u1 = self.marginal1.cdf(x1)
         u2 = self.copula.conditional_ppf(u1, q, adj = adj)

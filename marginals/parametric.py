@@ -12,7 +12,7 @@ from type_definitions import Vectorizable, Vectorizable1d
 
 
 class Normal(Marginal):
-    def __init__(self, loc: float = 0, scale: float = 1, adj: float = 1e-4):
+    def __init__(self, loc: float = 0, scale: float = 1, adj: float = 1e-5):
 
         # the order of these params depends on SciPy
         super().__init__(stats.norm, model_name = "Normal", family_name = "Parametric", initial_param_guess = [0, 1], 
@@ -36,7 +36,7 @@ class Normal(Marginal):
 
 # private
 class CenteredNormal(Marginal):
-    def __init__(self, scale: float = 1, adj: float = 1e-4):
+    def __init__(self, scale: float = 1, adj: float = 1e-5):
 
         super().__init__(stats.norm, model_name = "CenteredNormal", family_name = "Parametric",
                          initial_param_guess = [1], param_bounds = [(adj, np.inf)],
@@ -78,7 +78,7 @@ class CenteredNormal(Marginal):
         return 0
     
 
-    def _params_to_cvar(self, scale: float, alpha: float = 0.95) -> float:
+    def _params_to_cvar(self, scale: float, alpha: float = 1e-5) -> float:
         # Mattew Norton et al 2019
         # _pdf and _ppf use standard normal
 
@@ -88,7 +88,7 @@ class CenteredNormal(Marginal):
 class SkewNormal(Marginal):
     # Azzalini's SkewNormal distribution
 
-    def __init__(self, loc: float = 0, scale: float = 1, shape: float = 0, adj: float = 1e-4):
+    def __init__(self, loc: float = 0, scale: float = 1, shape: float = 0, adj: float = 1e-5):
 
         super().__init__(None, model_name = "SkewNormal", family_name = "Parametric", initial_param_guess = [0, 1, 0],
                          param_bounds = [(-np.inf, np.inf), (adj, np.inf), (-np.inf, np.inf)], param_names = ["loc", "scale", "shape"],
@@ -123,7 +123,7 @@ class SkewNormal(Marginal):
     
 
     def _ppf(self, q: Vectorizable, loc: float, scale: float, shape: float) -> Vectorizable:
-        a, b = utils.find_x_bounds(self._cdf, loc, scale, shape)
+        a, b = utils.find_x_bounds(self._cdf, loc, scale, loc, scale, shape)
         return utils.solve_for_ppf(self._cdf, q, a, b, loc, scale, shape)
     
 
@@ -186,7 +186,7 @@ class SkewNormal(Marginal):
     
 
 class StudentsT(Marginal):
-    def __init__(self, df: float = 30, loc: float = 0, scale: float = 1, adj: float = 1e-4):
+    def __init__(self, df: float = 30, loc: float = 0, scale: float = 1, adj: float = 1e-5):
        
         # the order of these params depends on SciPy
         super().__init__(stats.t, model_name = "StudentsT", family_name = "Parametric", initial_param_guess = [30, 0, 1], 
@@ -223,7 +223,7 @@ class StudentsT(Marginal):
 class StandardSkewedT(Marginal):
     # Hansen 1994
 
-    def __init__(self, eta: float = 30, lam: float = 0, df_cap: float = 100, adj: float = 1e-4, 
+    def __init__(self, eta: float = 30, lam: float = 0, df_cap: float = 100, adj: float = 1e-5, 
                  monte_carlo_n: int = 10_000, monte_carlo_seed: Union[int, None] = None):
 
         super().__init__(None, model_name = "StandardSkewedT", family_name = "Parametric",
