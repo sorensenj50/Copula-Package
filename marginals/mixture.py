@@ -20,7 +20,8 @@ class NormalMix(Mixture, Marginal):
         Marginal.__init__(self, None, model_name = "NormalMix", family_name = "Finite Mixture",
                          initial_param_guess = [0.5, 0, 0, 1, 1], 
                          param_bounds = [(0, 1), (-np.inf, np.inf), (-np.inf, np.inf), (adj, np.inf), (adj, np.inf)],
-                         param_names = ["p1", "mu1", "mu2", "sigma1", "sigma2"], params = [p1, loc1, loc2, scale1, scale2])
+                         param_names = ["p1", "mu1", "mu2", "sigma1", "sigma2"], params = [p1, loc1, loc2, scale1, scale2],
+                         mm_fit_available = False)
 
         Mixture.__init__(self, Normal())
 

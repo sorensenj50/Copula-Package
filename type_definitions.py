@@ -9,3 +9,4 @@ Vectorizable1d = Union[np.ndarray, pd.Series]
 Vectorizable2d = Union[np.ndarray, pd.DataFrame]
 
 Parameters = Tuple[float, ...]
+

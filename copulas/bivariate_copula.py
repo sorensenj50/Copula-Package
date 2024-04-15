@@ -11,7 +11,7 @@ from type_definitions import Vectorizable
 class BivariateCopula(base.Base):
     def __init__(self, *args, **kwargs):
         self.summary_title = "Bivariate Copula"
-        self.estimation_method_str = "CMLE"
+        self.estimation_method_str = "MLE"
         super().__init__(*args, **kwargs)
     
 

@@ -98,8 +98,8 @@ class Archimedean(BivariateCopula):
 class Clayton(Archimedean):
     def __init__(self, theta: float = 1e-5, rotation: int = 0, adj: float = 1e-5):
         super().__init__(rotation = rotation, model_name = "Clayton", family_name = "Archimedean", 
-                         initial_param_guess = [adj],
-                         param_bounds = [(adj, np.inf)], param_names = ("theta",), params = (theta,))
+                         initial_param_guess = [adj], param_bounds = [(adj, np.inf)], 
+                         param_names = ("theta",), params = (theta,), mm_fit_available = True)
         
     
     def _cdf(self, u1: Vectorizable1d, u2: Vectorizable1d, theta: float) -> Vectorizable:
@@ -154,9 +154,8 @@ class Clayton(Archimedean):
 class Frank(Archimedean):
     def __init__(self, theta: float = 0, rotation: float = 0):
         super().__init__(rotation = rotation, model_name = "Frank", family_name = "Archimedean",
-                         initial_param_guess = [0],
-                         param_bounds = [(-np.inf, np.inf)], param_names = ("theta",),
-                         params = (float(theta),))
+                         initial_param_guess = [0], param_bounds = [(-np.inf, np.inf)], param_names = ("theta",),
+                         params = (float(theta),), mm_fit_available = True)
         
         # ensuring non-integer input theta
         # avoids potential problems raising to negative powers in numpy
@@ -253,9 +252,8 @@ class Frank(Archimedean):
 class Gumbel(Archimedean):
     def __init__(self, theta: float = 1, rotation: float = 0):
         super().__init__(rotation = rotation, model_name = "Gumbel", family_name = "Archimedean",
-                         initial_param_guess = [1], 
-                         param_bounds = [(1, np.inf)], param_names = ("theta",),
-                         params = (theta,))
+                         initial_param_guess = [1], param_bounds = [(1, np.inf)], param_names = ("theta",),
+                         params = (theta,), mm_fit_available = True)
 
 
     def _A(self, u1: Vectorizable, u2: Vectorizable, theta: float) -> Vectorizable:

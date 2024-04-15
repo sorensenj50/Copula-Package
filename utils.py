@@ -218,17 +218,4 @@ def monte_carlo_stats(marginal):
 
 
 
-def _cumulative_level(density):
-    # Flatten the array and get the indices that would sort it
-    flattened = density.flatten()
-    sorted_indices = np.argsort(flattened)
-    
-    sorted_arr = flattened[sorted_indices]
-    cumsum_arr = np.cumsum(sorted_arr)
-    cumsum_arr /= cumsum_arr[-1] # normalizing to have sum of 1
-    
-    # map back to original indice
-    cum = np.empty_like(flattened)
-    cum[sorted_indices] = cumsum_arr
-    
-    return cum.reshape(density.shape)
+

@@ -12,10 +12,13 @@ from type_definitions import Vectorizable
 
 
 class Base:
-    def __init__(self, model_name: str, family_name: str, initial_param_guess: Union[list, tuple], param_bounds: Union[list, tuple], param_names: Union[list, tuple], params: Union[list, tuple]):
+    def __init__(self, model_name: str, family_name: str, initial_param_guess: Union[list, tuple], 
+                 param_bounds: Union[list, tuple], param_names: Union[list, tuple], params: Union[list, tuple],
+                 mm_fit_available: bool):
 
         self.model_name = model_name
         self.family_name = family_name
+        self.mm_fit_available = mm_fit_available
         self.estimation_method_str = "MLE" # default, can be changed
 
         self.initial_param_guess = initial_param_guess
@@ -31,7 +34,7 @@ class Base:
 
         # these variables are calculated post-fit
         # initializing them here for clarity of what variables are included in this object
-        
+
         self.n = np.nan
         self.LL = np.nan; self.aic = np.nan; self.bic = np.nan
         self.hess_matrix = np.full((self.k, self.k), np.nan); self.se = np.full(self.k, np.nan)

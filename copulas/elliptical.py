@@ -26,7 +26,7 @@ class Normal(Elliptical):
     def __init__(self, Q: float = 0, adj: float = 1e-4):
         super().__init__(model_name = "Normal", family_name = "Elliptical", initial_param_guess = [0], 
                          param_bounds = [(-1 + adj, 1 - adj)], param_names = ("Q",), 
-                         params = (Q,))
+                         params = (Q,), mm_fit_available = True)
         
     
     def _distance(self, z1: Vectorizable, z2: Vectorizable, Q: float) -> Vectorizable:
@@ -45,15 +45,15 @@ class Normal(Elliptical):
         return -np.log(self._scale_factor(Q)) - 1/2 * self._distance(z1, z2, Q)
     
 
-    def _conditional_cdf(self, u1: Vectorizable, u2: Vectorizable, Q: float, adj: float = 1e-4) -> Vectorizable:
+    def _conditional_cdf(self, u1: Vectorizable, u2: Vectorizable, Q: float, adj: float = 1e-5) -> Vectorizable:
         # adj unused but here for consistency
         # Carol Alexander II.6.61 (correcting typo)
 
         z1 = stats.norm.ppf(u1); z2 = stats.norm.ppf(u2)
-        return stats.norm.cdf((Q * z2 - z1) / self._scale_factor(Q))
+        return stats.norm.cdf((z2 - Q * z1) / self._scale_factor(Q))
     
 
-    def _conditional_ppf(self, u1: Vectorizable, q: Vectorizable, Q: float, adj: float = 1e-4) -> Vectorizable:
+    def _conditional_ppf(self, u1: Vectorizable, q: Vectorizable, Q: float, adj: float = 1e-5) -> Vectorizable:
         # adj unused but here for consistency
         # Carol Alexander II.6.62
 
@@ -91,7 +91,7 @@ class StudentsT(Elliptical):
         super().__init__(model_name = "StudentsT", family_name = "Elliptical", 
                          initial_param_guess = [30, 0], 
                          param_bounds = [(1, df_upper_bound), (-1 + adj, 1 - adj)], 
-                         param_names = ("df", "Q"), params = (df, Q))
+                         param_names = ("df", "Q"), params = (df, Q), mm_fit_available = False)
 
 
     def _distance(self, z1: Vectorizable, z2: Vectorizable, Q: float) -> Vectorizable:

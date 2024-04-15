@@ -98,8 +98,8 @@ class Marginal(base.Base):
         top_right = [
             ("Log-Likelihood:", utils.format_func(self.LL, 10)), ("AIC:", utils.format_func(self.aic, 10)),
             ("BIC:", utils.format_func(self.bic, 10)), ("Skewness:", utils.format_func(self.skewness, 10)), 
-            ("Excess Kurtosis:", utils.format_func(self.kurtosis, 10)), ("95% VaR:", utils.format_func(self.var, 10)),
-            ("95% CVaR:", utils.format_func(self.cvar, 10)), ("", ""), ("", ""),
+            ("Excess Kurtosis:", utils.format_func(self.kurtosis, 10)), ("VaR (95%)", utils.format_func(self.var, 10)),
+            ("CVaR (95%)", utils.format_func(self.cvar, 10)), ("", ""), ("", ""),
         ]
 
         return top_left, top_right

@@ -11,7 +11,7 @@ class Independent(BivariateCopula):
         super().__init__(model_name = "Independent", family_name = np.nan, 
                          initial_param_guess = [],
                          param_bounds = [], param_names = [], 
-                         params = [])
+                         params = [], mm_fit_available = False)
         
     def _logpdf(self, u1: Vectorizable, u2: Vectorizable) -> Vectorizable:
         return np.zeros_like(u1)

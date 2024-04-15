@@ -17,7 +17,7 @@ class GaussianKDE(Marginal):
 
         super().__init__(None, model_name = "GaussianKDE", family_name = "Non-Parametric", 
                          initial_param_guess = [], param_names = [],
-                         param_bounds = [], params = [])
+                         param_bounds = [], params = [], mm_fit_available = False)
 
         # explicitly defaulting to Scott if not provided--this SciPy's default too
         self.bw_method = bw_method if bw_method is not None else "scott"

@@ -7,7 +7,7 @@ from .plot_utils import _handle_ax, _merge_kw, _get_joint_model_x_range, _cumula
 
 
 
-def marginal_pdf(marginal, ax = None, range_num = 250, **kwargs):
+def marginal_pdf(marginal, ax = None, range_num = 200, **kwargs):
     ax = _handle_ax(ax = ax)
 
     u = utils.get_u_range(range_num = range_num)
@@ -18,7 +18,7 @@ def marginal_pdf(marginal, ax = None, range_num = 250, **kwargs):
     return ax
 
 
-def marginal_cdf(marginal, ax = None, range_num = 250, **kwargs):
+def marginal_cdf(marginal, ax = None, range_num = 200, **kwargs):
     ax = _handle_ax(ax = ax)
 
     u = utils.get_u_range(range_num = range_num)
@@ -29,7 +29,7 @@ def marginal_cdf(marginal, ax = None, range_num = 250, **kwargs):
     return ax
 
 
-def marginal_ppf(marginal, ax = None, range_num = 250, **kwargs):
+def marginal_ppf(marginal, ax = None, range_num = 200, **kwargs):
     ax = _handle_ax(ax = ax)
 
     u = utils.get_u_range(range_num = range_num)
@@ -39,7 +39,7 @@ def marginal_ppf(marginal, ax = None, range_num = 250, **kwargs):
     return ax
 
 
-def marginal_qq(marginal, ax = None, range_num = 250, **kwargs):
+def marginal_qq(marginal, ax = None, range_num = 200, **kwargs):
     ax = _handle_ax(ax = ax)
 
     u = utils.get_u_range(range_num = range_num)
@@ -92,7 +92,7 @@ def copula_quantile_curves(copula, quantiles = [0.95, 0.75, 0.5, 0.25, 0.05], ad
     return ax
 
 
-def copula_3d_surf(copula, to_plot = "pdf", adj = 5e-2, range_num = 250, elev = None, azim = None, cmap = "viridis", ax = None, **kwargs):
+def copula_3d_surf(copula, to_plot = "pdf", adj = 5e-2, range_num = 200, elev = None, azim = None, cmap = "viridis", ax = None, **kwargs):
     
     ax = _handle_ax(ax = ax, subplot_kw = {"projection": "3d"})
 
@@ -105,7 +105,7 @@ def copula_3d_surf(copula, to_plot = "pdf", adj = 5e-2, range_num = 250, elev = 
     else:
         raise ValueError('"to_plot" argument must be "pdf" or "cdf"')
 
-    _ = ax.plot_surface(u1, u2, surf, antialiased = False, **merge_kw({"cmap": cmap}, kwargs))
+    _ = ax.plot_surface(u1, u2, surf, antialiased = False, **_merge_kw({"cmap": cmap}, kwargs))
     ax.set_zlim(0, None)
     ax.view_init(elev = elev, azim = azim)
     
@@ -126,6 +126,7 @@ def copula_contour(copula, adj = 1e-2, range_num = 100, num_levels = 5, cmap = "
     return ax
 
 
+# abstract this
 def joint_scatter(joint_model, n = 1000, seed = None, ax = None, **kwargs):
 
     ax = _handle_ax(ax = ax)
@@ -136,7 +137,7 @@ def joint_scatter(joint_model, n = 1000, seed = None, ax = None, **kwargs):
 
 
 # abstract this into copula surf
-def joint_3d_surf(joint_model, to_plot = "pdf", adj = 1e-3, range_num = 250, elev = None, azim = None, cmap = "viridis", ax = None, **kwargs):
+def joint_3d_surf(joint_model, to_plot = "pdf", adj = 1e-3, range_num = 200, elev = None, azim = None, cmap = "viridis", ax = None, **kwargs):
     ax = _handle_ax(ax = ax, subplot_kw = {"projection": "3d"})
 
     X1, X2 = _get_joint_model_x_range(joint_model, adj = adj, range_num = range_num)
@@ -153,8 +154,8 @@ def joint_3d_surf(joint_model, to_plot = "pdf", adj = 1e-3, range_num = 250, ele
     ax.view_init(elev = elev, azim = azim)
     return ax
     
-
-def joint_contour(joint_model, adj = 1e-3, range_num = 250, cmap = "viridis", num_levels = 5, ax = None, **kwargs):
+# abstract this
+def joint_contour(joint_model, adj = 1e-3, range_num = 200, cmap = "viridis", num_levels = 5, ax = None, **kwargs):
     ax = _handle_ax(ax = ax)
 
     X1, X2 = _get_joint_model_x_range(joint_model, adj = adj, range_num = range_num)
@@ -165,6 +166,23 @@ def joint_contour(joint_model, adj = 1e-3, range_num = 250, cmap = "viridis", nu
     CS = ax.contour(X1, X2, cum_density, **_merge_kw({"cmap": cmap, "levels": num_levels}, kwargs))
     ax.clabel(CS, inline=True, fontsize=10)
     return ax
+
+
+# abstract this
+def joint_quantile_curves(joint_model, adj = 1e-3, range_num = 200, quantiles = [0.95, 0.75, 0.5, 0.25, 0.05], ax = None):
+    ax = _handle_ax(ax = ax)
+
+    x_range = _get_joint_model_x_range(joint_model, adj = adj, range_num = range_num)[0][0]
+    X1, q = np.meshgrid(x_range, quantiles)
+
+    curves = joint_model.conditional_ppf(X1, q)
+
+    for q_label, curve in zip(quantiles, curves):
+        ax.plot(x_range, curve, label = q_label)
+
+    ax.legend()
+    return ax
+
 
 
 

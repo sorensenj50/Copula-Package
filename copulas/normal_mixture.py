@@ -16,9 +16,9 @@ class NormalMix(Mixture, BivariateCopula):
         # case if lengths of p and Q disagree / with n_normals
         p1 = self._normalize_p(p1)
 
-        BivariateCopula.__init__(self, "NormalMix", "Finite Mixture", [np.nan, np.nan, np.nan],
-                         [(adj, 1 - adj), (-1 + adj, 1 - adj), (-1 + adj, 1 - adj)],
-                         ["p1", "Q1", "Q2"], [p1, Q1, Q2])
+        BivariateCopula.__init__(self, model_name = "NormalMix", family_name = "Finite Mixture", initial_param_guess = [np.nan, np.nan, np.nan],
+                         param_bounds = [(adj, 1 - adj), (-1 + adj, 1 - adj), (-1 + adj, 1 - adj)],
+                         param_names = ["p1", "Q1", "Q2"], params = [p1, Q1, Q2], mm_fit_available = False)
         
         Mixture.__init__(self, Normal())
     
