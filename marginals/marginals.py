@@ -97,12 +97,23 @@ class Marginal(base.Base):
 
         top_right = [
             ("Log-Likelihood:", utils.format_func(self.LL, 10)), ("AIC:", utils.format_func(self.aic, 10)),
-            ("BIC:", utils.format_func(self.bic, 10)), ("Skewness:", utils.format_func(self.skewness, 10)), 
-            ("Excess Kurtosis:", utils.format_func(self.kurtosis, 10)), ("VaR (95%)", utils.format_func(self.var, 10)),
-            ("CVaR (95%)", utils.format_func(self.cvar, 10)), ("", ""), ("", ""),
+            ("BIC:", utils.format_func(self.bic, 10)), ("Mean:", utils.format_func(self.mean, 10)), 
+            ("Std. Dev:", utils.format_func(self.std_dev, 10)), ("Skewness:", utils.format_func(self.skewness, 10)), 
+            ("Excess Kurtosis:", utils.format_func(self.kurtosis, 10)), ("", ""), ("", ""),
         ]
 
         return top_left, top_right
+    
+
+    @property
+    def mean(self) -> float:
+        return self._params_to_mean(*self.params)
+    
+
+    @property
+    def std_dev(self) -> float:
+        return self._params_to_std_dev(*self.params)
+
     
     @property
     def skewness(self) -> float:
@@ -113,15 +124,17 @@ class Marginal(base.Base):
     def kurtosis(self) -> float:
         return self._params_to_kurtosis(*self.params)
     
-
-    @property
-    def var(self) -> float:
-        return self._params_to_var(*self.params)
+    
+    def _params_to_mean(self, *params: float) -> float:
+        raise NotImplementedError
     
 
-    @property
-    def cvar(self) -> float:
-        return self._params_to_cvar(*self.params)
+    def _params_to_variance(self, *params: float) -> float:
+        raise NotImplementedError
+    
+
+    def _params_to_std_dev(self, *params: float) -> float:
+        return np.sqrt(self._params_to_variance(*params))
     
     
     def _params_to_skewness(self, *params: float) -> float:
@@ -129,13 +142,4 @@ class Marginal(base.Base):
     
     
     def _params_to_kurtosis(self, *params: float) -> float:
-        raise NotImplementedError
-    
-    
-    def _params_to_var(self, *params: float, alpha: float = 0.95) -> float:
-        # simply accessing the defined PPF of the distribution
-        return self._ppf(1 - alpha, *params)
-    
-
-    def _params_to_cvar(self, *params: float, alpha: float = 0.95) -> float:
         raise NotImplementedError

@@ -19,6 +19,13 @@ class Normal(Marginal):
                         param_bounds = [(-np.inf, np.inf), (adj, np.inf)], param_names = ["loc", "scale"],
                         params = [loc, scale], mm_fit_available = True)
         
+    def _params_to_mean(self, loc: float, scale: float) -> float:
+        return loc
+    
+    
+    def _params_to_variance(self, loc: float, scale: float) -> float:
+        return scale ** 2
+        
 
     def _params_to_skewness(self, loc: float, scale: float) -> float:
         return 0
@@ -68,6 +75,13 @@ class CenteredNormal(Marginal):
         opt_params = self.rv_obj.fit(valid_x, floc = 0)
         self._post_process_fit(valid_x, np.array([opt_params[1]]), 
                                self._get_obj_func(valid_x), robust_cov = robust_cov)
+        
+    def _params_to_mean(self, scale: float) -> float:
+        return 0
+    
+
+    def _params_to_variance(self, scale: float) -> float:
+        return scale ** 2
     
 
     def _params_to_skewness(self, scale: float) -> float:
@@ -168,6 +182,7 @@ class SkewNormal(Marginal):
         # Bernadi 2012
         # see also "Estimation methods for Expected Shortfall" by University of Manchester
         # more consice formula, though it mistakenly uses shape instead of delta in term2
+
         p = 1 - alpha
 
         x_p = self._ppf(p, loc, scale, shape)
@@ -191,6 +206,14 @@ class StudentsT(Marginal):
         super().__init__(stats.t, model_name = "StudentsT", family_name = "Parametric", initial_param_guess = [30, 0, 1], 
                         param_bounds = [(1, np.inf), (-np.inf, np.inf), (adj, np.inf)], param_names = ["df", "loc", "scale"],
                         params = [df, loc, scale], mm_fit_available = False)
+        
+
+    def _params_to_mean(self, df: float, loc: float, scale: float) -> float:
+        return loc
+    
+
+    def _params_to_variance(self, df: float, loc: float, scale: float) -> float:
+        return (scale ** 2) * (df / (df - 2))
         
 
     def _params_to_skewness(self, df: float, loc: float, scale: float) -> float:
@@ -301,6 +324,19 @@ class StandardSkewedT(Marginal):
         self._skew, self._kurtosis, self._cvar = utils.monte_carlo_stats(self)
 
 
+    def _params_to_mean(self, eta: float, lam: float) -> float:
+        return 0
+    
+
+    def _params_to_variance(self, eta: float, lam: float) -> float:
+        return 1
+    
+    
+    def _params_to_skewness(self, eta: float, lam: float) -> float:
+        return
+    
+
+
     @property
     def skewness(self) -> float:
         # bypassing / not implementing _params_to_skew
@@ -363,6 +399,14 @@ class Uniform(Marginal):
         return stats.uniform.logpdf(x, *self._to_scipy_params(low, high))
     
 
+    def _params_to_mean(self, low: float, high: float) -> float:
+        return 1/2 * (low + high)
+    
+
+    def _params_to_variance(self, low: float, high: float) -> float:
+        return 1/12 * np.power(high - low, 2)
+    
+
     def _params_to_skewness(self, low: float, high: float) -> float:
         return 0 
     
@@ -372,7 +416,7 @@ class Uniform(Marginal):
     
 
     def _params_to_cvar(self, low: float, high: float, alpha = 0.95) -> float:
-        return 1/2 * (low + self.ppf(1 - alpha))
+        return self._params_to_mean(low, self._ppf(1 - alpha))
 
     
 
@@ -415,6 +459,13 @@ class Exponential(Marginal):
         opt_params = stats.expon.fit(valid_x, floc = 0)
         self._post_process_fit(valid_x, np.array([opt_params[1]]),
                                self._get_obj_func(valid_x), robust_cov = robust_cov)
+        
+    def _params_to_mean(self, rate: float) -> float:
+        return 1 / rate
+    
+
+    def _params_to_variance(self, rate: float) -> float:
+        return 1 / np.power(rate, 2)
     
         
     def _params_to_skewness(self, rate: float) -> float:

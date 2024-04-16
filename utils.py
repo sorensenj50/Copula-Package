@@ -206,15 +206,20 @@ def monte_carlo_cvar(marginal_dist, n = 1000, seed = None, alpha = 0.95):
 
 
 def monte_carlo_stats(marginal):
-    X = marginal.simulate(n = marginal.monte_carlo_n, seed = marginal.monte_carlo_seed)
 
-    skewness = stats.skew(X); kurtosis = stats.kurtosis(X)
+    X = marginal.simulate(n = marginal.monte_carlo_n, 
+                          seed = marginal.monte_carlo_seed)
 
-    quantile = np.quantile(X, 0.05)
-    cvar_filter = X <= quantile
-    cvar = np.mean(X[cvar_filter])
+    mean = np.mean(X)
+    variance = np.var(X)
+    skew = stats.skew(X)
+    kurtosis = stats.kurtosis(X)
 
-    return skewness, kurtosis, cvar
+    #quantile = np.quantile(X, 0.05)
+    #cvar_filter = X <= quantile
+    #cvar = np.mean(X[cvar_filter])
+
+    return mean, variance, skew, kurtosis
 
 
 

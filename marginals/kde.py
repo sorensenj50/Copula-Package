@@ -29,6 +29,8 @@ class GaussianKDE(Marginal):
         self.monte_carlo_seed = monte_carlo_seed
 
         # will be estimated via monte carlo after fit
+        self._mean = np.nan
+        self._variance = np.nan
         self._skew = np.nan
         self._kurtosis = np.nan
         self._cvar = np.nan
@@ -49,7 +51,7 @@ class GaussianKDE(Marginal):
         self.kde_factor = self.kde.factor
 
         # monte carlo estimates for skew, kurtosis, cvar
-        self._skew, self._kurtosis, self._cvar = utils._monte_carlo_stats(self)
+        self._mean, self._variance, self._skew, self._kurtosis = utils._monte_carlo_stats(self)
 
 
     def _set_cdf_ppf(self, min_x: float, max_x: float) -> None:
@@ -103,6 +105,14 @@ class GaussianKDE(Marginal):
     def _ppf(self, q: Vectorizable1d) -> Vectorizable1d:
         return self.interp1d_ppf_func(q)
     
+
+    def _params_to_mean(self, *params) -> float:
+        return self._mean
+    
+
+    def _params_to_variance(self, *params) -> float:
+        return self._variance
+
 
     def _params_to_skewness(self, *params) -> float:
         # Monte Carlo

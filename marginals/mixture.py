@@ -161,7 +161,8 @@ class NormalVarianceMix(Mixture, Marginal):
 
         Marginal.__init__(self, None, model_name = "NormalVarianceMix", family_name = "Finite Mixture",
                           initial_param_guess = [0.5, 1, 1], param_bounds = [(0, 1), (adj, np.inf), (adj, np.inf)],
-                          param_names = ["p1", "scale1", "scale2"], params = [p1, scale1, scale2])
+                          param_names = ["p1", "scale1", "scale2"], params = [p1, scale1, scale2],
+                          mm_fit_available = False)
         
         Mixture.__init__(self, CenteredNormal())
 
@@ -231,6 +232,10 @@ class NormalVarianceMix(Mixture, Marginal):
         sigmas = np.where(param_draws == 0, scale1, scale2)
 
         return np.array([rng.normal(0, sigmas[i]) for i in range(n)])
+    
+    
+    def _params_to_mean(self, *params: float) -> float:
+        return 0
     
 
     def _params_to_variance(self, p1: float, scale1: float, scale2: float) -> float:
