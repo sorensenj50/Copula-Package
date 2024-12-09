@@ -99,9 +99,8 @@ class PortfolioMixtureDist:
         skewness = central_moment(3) / (mix_variance**1.5)
         kurtosis = central_moment(4) / (mix_variance**2)
 
-        return {"Ann. Mean": mix_mean, "Ann Std": np.sqrt(mix_variance), "Sharpe": mix_mean / np.sqrt(mix_variance),
-                "Skew": skewness, "Kurtosis": kurtosis - 3, "P>0": self.prob_exceeding_hurdle(0)[0],
-                "P>5": self.prob_exceeding_hurdle(0.05)[0]}
+        return {"Ann. Mean": mix_mean, "Ann. Std": np.sqrt(mix_variance), "Sharpe": mix_mean / np.sqrt(mix_variance),
+                "Skew": skewness, "Kurtosis": kurtosis - 3}
     
     def prob_exceeding_hurdle(self, hurdle):
         return 1 - self._cdf(np.array([hurdle]))
@@ -131,8 +130,6 @@ class ManagerEvaluator:
         for i in range(len(self.p)):
             base_mean = self.sharpes[i] * self.vols[i]
             mean_vector = mean_decay_func(base_mean, n_managers, self.mean_decay_rate, self.mean_pct_floor)
-
-            print(mean_vector)
         
             regime_dist = PortfolioDist(mean_vector, self.vols[i], self.corrs[i])
             all_regimes.append(regime_dist)
@@ -148,6 +145,4 @@ class ManagerEvaluator:
         conditioned_crisis_distribution = PortfolioMixtureDist(crisis_p, crisis_regimes)
     
         return {"Dist": total_distribution,
-                "Crisis Dist": conditioned_crisis_distribution,
-                "Prob > Return": total_distribution.prob_exceeding_hurdle(self.return_hurdle)[0],
-                "Prob > Crisis Hurdle": conditioned_crisis_distribution.prob_exceeding_hurdle(self.crisis_hurdle)[0]}
+                "Crisis Dist": conditioned_crisis_distribution}
