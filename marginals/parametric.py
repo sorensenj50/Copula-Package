@@ -241,6 +241,14 @@ class StudentsT(Marginal):
         return loc - scale * term1 * term2
     
 
+#class SkewedGT(Marginal):
+ #   def __init__(self, k, n, lam, sigma, adj = float 1e-5):
+ #       
+ #       super().__init__(None, model_name = "SkewedGT", family_name = "Parametric",
+ #                        initial_param_guess = [0, 0, 0, 1], param_bounds = [(-np.inf, np.inf), (-np.inf, np.inf), (-np.inf, np.inf), (-np.inf, np.inf)],
+ #                        params = [k, n, lam, sigma])
+    
+
 
 class StandardSkewedT(Marginal):
     # Hansen 1994
@@ -331,10 +339,9 @@ class StandardSkewedT(Marginal):
     def _params_to_variance(self, eta: float, lam: float) -> float:
         return 1
     
-    
+
     def _params_to_skewness(self, eta: float, lam: float) -> float:
         return
-    
 
 
     @property
